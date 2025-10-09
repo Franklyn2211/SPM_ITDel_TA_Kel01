@@ -18,9 +18,12 @@ class User extends Authenticatable
      * @var list<string>
      */
     protected $fillable = [
+        'cis_user_id',
+        'username',
         'name',
         'email',
         'password',
+        'active'
     ];
 
     /**
@@ -45,4 +48,8 @@ class User extends Authenticatable
             'password' => 'hashed',
         ];
     }
+
+    public function roles() {
+    return $this->hasMany(UserRole::class, 'cis_user_id', 'cis_user_id');
+}
 }

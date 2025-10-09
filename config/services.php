@@ -35,4 +35,9 @@ return [
         ],
     ],
 
+    'ext_api' => [
+        'base_url' => env('API_BASE_URL', 'https://cis-dev.del.ac.id/api'),
+        'timeout'  => (int) env('API_TIMEOUT', 15),
+    ],
+
 ];

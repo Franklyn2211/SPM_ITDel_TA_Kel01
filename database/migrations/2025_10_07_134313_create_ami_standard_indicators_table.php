@@ -1,0 +1,33 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::create('ami_standard_indicators', function (Blueprint $table) {
+            $table->string('id')->primary(); // contoh: AI001
+            $table->text('description'); // deskripsi indikator
+            $table->string('standard_id'); // FK ke ami_standards
+
+            $table->unsignedBigInteger('created_by')->nullable();
+            $table->unsignedBigInteger('updated_by')->nullable();
+
+            $table->boolean('active')->default(true);
+            $table->timestamps();
+
+            // Foreign keys
+            $table->foreign('standard_id')->references('id')->on('ami_standards')->cascadeOnDelete();
+            $table->foreign('created_by')->references('id')->on('users')->nullOnDelete();
+            $table->foreign('updated_by')->references('id')->on('users')->nullOnDelete();
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('ami_standard_indicators');
+    }
+};
