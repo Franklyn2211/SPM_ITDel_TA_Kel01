@@ -54,26 +54,32 @@ class AmiStandardIndicator extends Model
     {
         return $this->belongsTo(User::class, 'created_by', 'id');
     }
+
     public function updatedBy()
     {
         return $this->belongsTo(User::class, 'updated_by', 'id');
     }
 
+    // Generate the next available unique ID
     public static function generateNextId()
     {
-        // Mendapatkan ID terakhir dari database
-        $latestId = self::orderBy('id', 'desc')->first();
+        // Ambil nomor terbesar berdasarkan angka setelah prefix "ASI"
+        $maxNum = (int) self::where('id', 'like', 'ASI%')
+            ->selectRaw("MAX(CAST(SUBSTRING(id, 4) AS UNSIGNED)) as maxnum")
+            ->value('maxnum');
 
-        // Mengambil nomor dari ID terakhir
-        $lastNumber = $latestId ? intval(substr($latestId->id, 2)) : 0;
+        // Increment the number by 1
+        $nextNumber = $maxNum + 1;
 
-        // Menambahkan 1 untuk mendapatkan nomor berikutnya
-        $nextNumber = $lastNumber + 1;
+        // Check if the next number already exists
+        $nextId = 'ASI' . str_pad((string)$nextNumber, 3, '0', STR_PAD_LEFT);
 
-        // Mengonversi nomor berikutnya ke format yang diinginkan (URXXX)
-        $nextId = 'ASI' . str_pad($nextNumber, 3, '0', STR_PAD_LEFT);
+        // If the ID already exists, recursively call the method until we get a unique one
+        if (self::where('id', $nextId)->exists()) {
+            return self::generateNextId(); // Recursive call until a unique ID is generated
+        }
 
+        // Return the unique ID
         return $nextId;
     }
-
 }

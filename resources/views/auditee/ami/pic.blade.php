@@ -10,11 +10,8 @@
         <i class="ph-caret-down collapsible-indicator ph-sm m-1"></i>
       </a>
     </div>
-
     <div class="collapse d-lg-block my-lg-auto ms-lg-auto" id="page_header">
-      <div class="d-lg-flex align-items-center">
-        {{-- Removed the button here from the top --}}
-      </div>
+      <div class="d-lg-flex align-items-center"></div>
     </div>
   </div>
 
@@ -32,6 +29,7 @@
 @section('content')
 <div class="content pt-0">
 
+  {{-- Alert Success --}}
   @if (session('success'))
     <div class="alert alert-success border-0 alert-dismissible fade show">
       <div class="d-flex align-items-center">
@@ -40,6 +38,8 @@
       <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
     </div>
   @endif
+
+  {{-- Alert Error --}}
   @if ($errors->any())
     <div class="alert alert-danger border-0 alert-dismissible fade show">
       <div class="d-flex align-items-center">
@@ -57,6 +57,7 @@
     </div>
   @endif
 
+  {{-- Tabel --}}
   <div class="card">
     <div class="card-header d-flex align-items-center">
       <h5 class="mb-0">Ringkasan PIC per Indikator (TA aktif)</h5>
@@ -73,11 +74,11 @@
       <table class="table table-hover align-middle" id="tablePic">
         <thead class="table-light">
           <tr>
-            <th style="width:60px;" class="text-center">No</th>
+            <th class="text-center" style="width:60px;">No</th>
             <th>Indikator</th>
             <th style="width:280px;">Standar (TA)</th>
             <th style="width:360px;">PIC (Role)</th>
-            <th style="width:260px;" class="text-center">Aksi</th>
+            <th class="text-center" style="width:260px;">Aksi</th>
           </tr>
         </thead>
         <tbody>
@@ -110,17 +111,16 @@
                 <div class="d-flex justify-content-center flex-wrap gap-2">
                   @if($row->pics->count())
                     <button type="button"
-                      class="btn btn-sm btn-warning"
-                      onclick="openPicModal({
-                        mode: 'edit',
-                        indicatorId: @json($row->id),
-                        selectedRoleIds: @json($roleIds),
-                        actionUrl: '{{ route('auditee.ami.pic.update', $row->id) }}'
-                      })">
+                      class="btn btn-sm btn-warning btn-open-pic"
+                      data-mode="edit"
+                      data-id="{{ $row->id }}"
+                      data-roles='@json($roleIds)'
+                      data-action="{{ route('auditee.ami.pic.update', $row->id) }}">
                       <i class="ph-pencil me-1"></i> Ubah PIC
                     </button>
+
                     <form method="POST" action="{{ route('auditee.ami.pic.destroy', $row->id) }}"
-                          onsubmit="return confirm('Hapus semua PIC untuk indikator ini?');">
+                          onsubmit="return confirm('Hapus semua PIC untuk indikator ini?');" class="d-inline">
                       @csrf
                       @method('DELETE')
                       <button type="submit" class="btn btn-sm btn-danger">
@@ -129,13 +129,11 @@
                     </form>
                   @else
                     <button type="button"
-                      class="btn btn-sm btn-primary"
-                      onclick="openPicModal({
-                        mode: 'create',
-                        indicatorId: @json($row->id),
-                        selectedRoleIds: [],
-                        actionUrl: '{{ route('auditee.ami.pic.store', $row->id) }}'
-                      })">
+                      class="btn btn-sm btn-primary btn-open-pic"
+                      data-mode="create"
+                      data-id="{{ $row->id }}"
+                      data-roles='[]'
+                      data-action="{{ route('auditee.ami.pic.store', $row->id) }}">
                       <i class="ph-plus me-1"></i> Tambah PIC
                     </button>
                   @endif
@@ -160,6 +158,7 @@
   </div>
 </div>
 
+{{-- Modal --}}
 <div class="modal fade" id="modalPic" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog">
     <form method="POST" id="formPic" class="modal-content">
@@ -178,8 +177,6 @@
             @endforeach
           </select>
           <div class="form-text">Role terpilih akan menjadi PIC aktif untuk indikator ini.</div>
-          @error('role_ids') <div class="text-danger small mt-1">{{ $message }}</div> @enderror
-          @error('role_ids.*') <div class="text-danger small mt-1">{{ $message }}</div> @enderror
         </div>
       </div>
       <div class="modal-footer">
@@ -190,177 +187,107 @@
   </div>
 </div>
 
+{{-- Tambahan CSS --}}
 @push('styles')
 <style>
   #tablePic .td-desc { white-space: normal !important; word-break: break-word; overflow-wrap: anywhere; max-width: 560px; }
   .clamp-3 { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
   .select2-container { width: 100% !important; }
-  .select2-container .select2-selection--multiple { min-height: 38px; border: 1px solid #d8d6de; }
-  .select2-container .select2-selection--multiple .select2-selection__rendered { padding: 4px; }
-  .select2-container .select2-selection__choice { background-color: #007bff; color: #fff; border: none; }
-  .select2-container .select2-selection__choice__remove { color: #fff; }
 </style>
 @endpush
 
 @push('scripts')
+<script src="https://code.jquery.com/jquery-3.6.4.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
 <script>
-  // Inisialisasi Select2
+$(document).ready(function() {
+
+  // Select2 initialization
   function initSelect2($el, opts) {
-    if (window.jQuery && $.fn && $.fn.select2) {
-      if ($el.hasClass('select2-hidden-accessible')) {
-        $el.select2('destroy');
-      }
+    if ($.fn.select2) {
+      if ($el.hasClass('select2-hidden-accessible')) $el.select2('destroy');
       $el.select2(Object.assign({
         width: '100%',
         minimumResultsForSearch: 0,
-        closeOnSelect: false
+        closeOnSelect: false,
+        dropdownParent: $('#modalPic'),
+        placeholder: "Pilih role...",
       }, opts || {}));
-    } else {
-      console.error('Select2 tidak dimuat. Pastikan library Select2 sudah di-include.');
     }
   }
 
-  // Fungsi untuk membuka modal
-  function openPicModal({ mode, indicatorId, selectedRoleIds, actionUrl }) {
-    console.log('openPicModal called with:', { mode, indicatorId, selectedRoleIds, actionUrl });
+  $(document).on('click', '.btn-open-pic', function () {
+    var mode   = $(this).data('mode');
+    var id     = $(this).data('id');
+    var roles  = $(this).data('roles') || [];
+    var action = $(this).data('action');
 
-    const form = document.getElementById('formPic');
-    const method = document.getElementById('formPic_method');
-    const sel = document.getElementById('formPic_roles');
-    const title = document.getElementById('modalPic_title');
-    const btn = document.getElementById('formPic_submit_btn');
+    var $form   = $('#formPic');
+    var $method = $('#formPic_method');
+    var $title  = $('#modalPic_title');
+    var $btn    = $('#formPic_submit_btn');
+    var $sel    = $('#formPic_roles');
+    var $modal  = $('#modalPic');
 
-    // Validasi elemen
-    if (!form || !method || !sel || !title || !btn) {
-      console.error('Elemen form tidak ditemukan:', { form, method, sel, title, btn });
-      return;
-    }
+    $form.attr('action', action || '#');
+    $method.val(mode === 'edit' ? 'PUT' : 'POST');
+    $title.text(mode === 'edit' ? 'Ubah PIC Indikator' : 'Tambah PIC Indikator');
+    $btn.text(mode === 'edit' ? 'Simpan Perubahan' : 'Simpan');
 
-    // Set form action dan method
-    form.action = actionUrl || '#';
-    method.value = mode === 'edit' ? 'PUT' : 'POST';
-    title.textContent = mode === 'edit' ? 'Ubah PIC Indikator' : 'Tambah PIC Indikator';
-    btn.textContent = mode === 'edit' ? 'Simpan Perubahan' : 'Simpan';
+    $sel.val(null).trigger('change'); // Clear previous selections
+    $sel.find('option').prop('selected', false); // Ensure all options are unselected
+    (Array.isArray(roles) ? roles : []).forEach(function (val) {
+      $sel.find('option[value="' + val + '"]').prop('selected', true);
+    });
 
-    // Reset dan set pilihan Select2
-    try {
-      $(sel).val(null).trigger('change');
-      if (selectedRoleIds && selectedRoleIds.length) {
-        $(sel).val(selectedRoleIds).trigger('change');
-      }
-    } catch (e) {
-      console.error('Error saat inisialisasi Select2:', e);
-    }
+    var bs = new bootstrap.Modal($modal[0]);
+    bs.show();
 
-    // Tampilkan modal
-    const modalEl = document.getElementById('modalPic');
-    if (modalEl) {
-      try {
-        const modal = new bootstrap.Modal(modalEl);
-        modal.show();
-      } catch (e) {
-        console.error('Error saat membuka modal:', e);
-      }
-    } else {
-      console.error('Modal tidak ditemukan!');
-    }
-  }
-
-  // Fungsi filter tabel
-  function setupFilter() {
-    const input = document.getElementById('filterTable');
-    const reset = document.getElementById('btnResetTable');
-    const table = document.getElementById('tablePic');
-
-    if (!input || !table) {
-      console.error('Elemen filter atau tabel tidak ditemukan:', { input, table });
-      return;
-    }
-
-    function doFilter() {
-      const q = (input.value || '').toLowerCase().trim();
-      const rows = table.querySelectorAll('tbody tr');
-      rows.forEach(tr => {
-        const text = tr.textContent.toLowerCase();
-        tr.style.display = q === '' || text.includes(q) ? '' : 'none';
-      });
-    }
-
-    input.addEventListener('input', doFilter);
-    if (reset) {
-      reset.addEventListener('click', () => {
-        input.value = '';
-        doFilter();
-      });
-    }
-  }
-
-  // Inisialisasi saat DOM selesai dimuat
-  document.addEventListener('DOMContentLoaded', function () {
-    console.log('DOM loaded, inisialisasi script...');
-
-    // Inisialisasi Select2
-    const $select = $('#formPic_roles');
-    if ($select.length) {
-      initSelect2($select, { multiple: true });
-    } else {
-      console.error('Elemen #formPic_roles tidak ditemukan!');
-    }
-
-    // Setup filter
-    setupFilter();
-
-    // Handle form submission
-    const form = document.getElementById('formPic');
-    if (form) {
-      form.addEventListener('submit', function (e) {
-        e.preventDefault();
-        console.log('Form submitted:', form.action);
-
-        const formData = new FormData(form);
-        const method = formData.get('_method') || 'POST';
-
-        fetch(form.action, {
-          method: method,
-          body: formData,
-          headers: {
-            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
-            'Accept': 'application/json'
-          }
-        })
-          .then(response => {
-            console.log('Response received:', response);
-            if (!response.ok) {
-              return response.json().then(err => {
-                throw new Error(err.message || 'Gagal menyimpan data: ' + response.statusText);
-              });
-            }
-            return response.json();
-          })
-          .then(data => {
-            console.log('Success response:', data);
-            if (data.success) {
-              window.location.reload();
-            } else {
-              alert('Gagal: ' + (data.message || 'Terjadi kesalahan'));
-            }
-          })
-          .catch(error => {
-            console.error('Error during fetch:', error);
-            alert('Terjadi kesalahan saat menyimpan data: ' + error.message);
-          });
-      });
-    } else {
-      console.error('Form #formPic tidak ditemukan!');
-    }
-
-    // Debug tombol
-    document.querySelectorAll('button').forEach(button => {
-      button.addEventListener('click', () => {
-        console.log('Button clicked:', button.textContent);
-      });
+    $modal.one('shown.bs.modal', function () {
+      initSelect2($sel, { multiple: true });
+      $sel.val(roles).trigger('change'); // Set selected roles
     });
   });
+
+  $('#formPic').on('submit', function (e) {
+    e.preventDefault();
+
+    var form = this;
+    var url  = form.action;
+    var fd   = new FormData(form);
+    var token = $('meta[name="csrf-token"]').attr('content');
+
+    fetch(url, {
+      method: 'POST',
+      body: fd,
+      headers: { 'X-CSRF-TOKEN': token, 'Accept': 'application/json' },
+      credentials: 'same-origin'
+    })
+    .then(res => res.json())
+    .then(data => {
+      if (data.success) {
+        window.location.reload();
+      } else {
+        alert(data.message || 'Gagal menyimpan data.');
+      }
+    })
+    .catch(err => alert('Gagal menyimpan: ' + err.message));
+  });
+
+  $('#filterTable').on('input', function() {
+    var q = $(this).val().toLowerCase();
+    $('#tablePic tbody tr').each(function() {
+      $(this).toggle($(this).text().toLowerCase().indexOf(q) > -1);
+    });
+  });
+
+  $('#btnResetTable').on('click', function() {
+    $('#filterTable').val('').trigger('input');
+  });
+
+});
 </script>
 @endpush
 @endsection

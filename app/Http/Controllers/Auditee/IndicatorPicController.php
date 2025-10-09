@@ -8,27 +8,22 @@ use App\Models\AmiStandardIndicatorPic;
 use App\Models\Role;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class IndicatorPicController extends Controller
 {
     public function index()
     {
-        $indicators = AmiStandardIndicator::with([
-                'standard:id,name,academic_config_id',
-                'standard.academicConfig:id,academic_code,active',
-            ])
-            ->whereHas('standard.academicConfig', fn($q) => $q->where('active', true))
+        $indicators = AmiStandardIndicator::with(['standard:id,name'])
             ->orderBy('id')
             ->get(['id', 'description', 'standard_id']);
 
-        $roles = Role::where('active', true)->orderBy('name')->get(['id','name']);
+        $roles = Role::where('active', true)->orderBy('name')->get(['id', 'name']);
 
         $rows = AmiStandardIndicator::with([
-                'standard:id,name,academic_config_id',
-                'standard.academicConfig:id,academic_code,active',
+                'standard:id,name',
                 'pics.role:id,name',
             ])
-            ->whereHas('standard.academicConfig', fn($q) => $q->where('active', true))
             ->orderBy('id')
             ->paginate(20);
 
@@ -42,35 +37,50 @@ class IndicatorPicController extends Controller
             'role_ids.*' => ['exists:roles,id'],
         ]);
 
-        $indicator->load('standard.academicConfig:id,active');
+        $indId = $indicator->id; // Explicitly use the ID
+        Log::info('Storing PIC for indicator ID: ' . $indId); // Debug log
 
-        if (!$indicator->standard || !$indicator->standard->academicConfig?->active) {
+        if (!$indId) {
             return response()->json([
                 'success' => false,
-                'message' => 'Indikator tidak berada pada standar dengan Tahun Akademik aktif.'
-            ], 422);
+                'message' => 'Indikator ID tidak valid.',
+            ], 400);
         }
 
-        $indId = $indicator->id;
         $selectedRoles = array_values(array_unique($data['role_ids']));
 
-        DB::transaction(function () use ($indId, $selectedRoles) {
-            AmiStandardIndicatorPic::where('standard_indicator_id', $indId)
-                ->whereNotIn('role_id', $selectedRoles)
-                ->delete();
+        try {
+            DB::transaction(function () use ($indId, $selectedRoles) {
+                // Delete PICs not in the new selection
+                AmiStandardIndicatorPic::where('standard_indicator_id', $indId)
+                    ->whereNotIn('role_id', $selectedRoles)
+                    ->delete();
 
-            foreach ($selectedRoles as $roleId) {
-                AmiStandardIndicatorPic::firstOrCreate(
-                    ['standard_indicator_id' => $indId, 'role_id' => $roleId],
-                    ['id' => AmiStandardIndicatorPic::generateNextId(), 'active' => true]
-                );
-            }
-        });
+                // Create or update PICs
+                foreach ($selectedRoles as $roleId) {
+                    $pic = AmiStandardIndicatorPic::updateOrCreate(
+                        ['standard_indicator_id' => $indId, 'role_id' => $roleId],
+                        ['id' => AmiStandardIndicatorPic::generateNextId(), 'active' => true]
+                    );
+                    Log::info('Created/Updated PIC: ', ['id' => $pic->id, 'indicator_id' => $indId, 'role_id' => $roleId]);
+                }
+            });
 
-        return response()->json([
-            'success' => true,
-            'message' => 'PIC indikator berhasil disimpan.'
-        ]);
+            return response()->json([
+                'success' => true,
+                'message' => 'PIC indikator berhasil disimpan.'
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error saving PIC: ' . $e->getMessage(), [
+                'indicator_id' => $indId,
+                'role_ids' => $selectedRoles,
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return response()->json([
+                'success' => false,
+                'message' => 'Terjadi kesalahan saat menyimpan data: ' . $e->getMessage(),
+            ], 500);
+        }
     }
 
     public function update(Request $request, AmiStandardIndicator $indicator)
@@ -80,55 +90,69 @@ class IndicatorPicController extends Controller
             'role_ids.*' => ['exists:roles,id'],
         ]);
 
-        $indicator->load('standard.academicConfig:id,active');
+        $indId = $indicator->id; // Explicitly use the ID
+        Log::info('Updating PIC for indicator ID: ' . $indId); // Debug log
 
-        if (!$indicator->standard || !$indicator->standard->academicConfig?->active) {
+        if (!$indId) {
             return response()->json([
                 'success' => false,
-                'message' => 'Indikator tidak berada pada standar dengan Tahun Akademik aktif.'
-            ], 422);
+                'message' => 'Indikator ID tidak valid.',
+            ], 400);
         }
 
-        $indId = $indicator->id;
         $selectedRoles = array_values(array_unique($data['role_ids'] ?? []));
 
-        DB::transaction(function () use ($indId, $selectedRoles) {
-            $q = AmiStandardIndicatorPic::where('standard_indicator_id', $indId);
-            if (empty($selectedRoles)) {
-                $q->delete();
-            } else {
-                $q->whereNotIn('role_id', $selectedRoles)->delete();
-                foreach ($selectedRoles as $roleId) {
-                    AmiStandardIndicatorPic::firstOrCreate(
-                        ['standard_indicator_id' => $indId, 'role_id' => $roleId],
-                        ['id' => AmiStandardIndicatorPic::generateNextId(), 'active' => true]
-                    );
+        try {
+            DB::transaction(function () use ($indId, $selectedRoles) {
+                $q = AmiStandardIndicatorPic::where('standard_indicator_id', $indId);
+                if (empty($selectedRoles)) {
+                    $q->delete();
+                } else {
+                    $q->whereNotIn('role_id', $selectedRoles)->delete();
+                    foreach ($selectedRoles as $roleId) {
+                        $pic = AmiStandardIndicatorPic::updateOrCreate(
+                            ['standard_indicator_id' => $indId, 'role_id' => $roleId],
+                            ['id' => AmiStandardIndicatorPic::generateNextId(), 'active' => true]
+                        );
+                        Log::info('Created/Updated PIC: ', ['id' => $pic->id, 'indicator_id' => $indId, 'role_id' => $roleId]);
+                    }
                 }
-            }
-        });
+            });
 
-        return response()->json([
-            'success' => true,
-            'message' => 'PIC indikator berhasil diperbarui.'
-        ]);
+            return response()->json([
+                'success' => true,
+                'message' => 'PIC indikator berhasil diperbarui.'
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error updating PIC: ' . $e->getMessage(), [
+                'indicator_id' => $indId,
+                'role_ids' => $selectedRoles,
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return response()->json([
+                'success' => false,
+                'message' => 'Terjadi kesalahan saat memperbarui data: ' . $e->getMessage(),
+            ], 500);
+        }
     }
 
     public function destroy(AmiStandardIndicator $indicator)
     {
-        $indicator->load('standard.academicConfig:id,active');
+        try {
+            $indId = $indicator->id;
+            AmiStandardIndicatorPic::where('standard_indicator_id', $indId)->delete();
 
-        if (!$indicator->standard || !$indicator->standard->academicConfig?->active) {
+        } catch (\Exception $e) {
+            Log::error('Error deleting PIC: ' . $e->getMessage(), [
+                'indicator_id' => $indicator->id,
+                'trace' => $e->getTraceAsString(),
+            ]);
             return response()->json([
                 'success' => false,
-                'message' => 'Indikator tidak berada pada standar dengan Tahun Akademik aktif.'
-            ], 422);
+                'message' => 'Terjadi kesalahan saat menghapus data: ' . $e->getMessage(),
+            ], 500);
         }
 
-        AmiStandardIndicatorPic::where('standard_indicator_id', $indicator->id)->delete();
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Semua PIC untuk indikator ini telah dihapus.'
-        ]);
+        return back()->with('success', 'PIC indikator berhasil dihapus.');
     }
 }

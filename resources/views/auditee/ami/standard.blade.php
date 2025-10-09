@@ -152,9 +152,6 @@
         <div class="mb-3">
           <label class="form-label">Nama Standar</label>
           <input type="text" name="name" class="form-control" required>
-          <div class="form-text">
-            * Academic config akan otomatis terisi dari tahun akademik aktif.
-          </div>
         </div>
       </div>
       <div class="modal-footer">
@@ -179,9 +176,6 @@
         <div class="mb-3">
           <label class="form-label">Nama Standar</label>
           <input type="text" name="name" id="edit_name" class="form-control" required>
-          <div class="form-text">
-            * Academic config tetap mengikuti yang aktif saat dibuat (tidak diedit di sini).
-          </div>
         </div>
       </div>
       <div class="modal-footer">
