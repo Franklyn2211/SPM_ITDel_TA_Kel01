@@ -83,7 +83,8 @@
           <tr>
             <th class="text-center" style="width: 60px;">No</th>
             <th>Nama Standar</th>
-            <th style="width: 220px;">Kode Akademik</th>
+            <th style="width: 220px;">Tahun Akademik</th>
+            <th class="text-center" style="width: 140px;">Indikator Kinerja</th>
             <th class="text-center" style="width: 120px;">Aksi</th>
           </tr>
         </thead>
@@ -93,6 +94,12 @@
               <td class="text-center">{{ $loop->iteration + ($rows->currentPage()-1)*$rows->perPage() }}</td>
               <td class="td-name">{{ $row->name }}</td>
               <td class="td-ac">{{ $row->academicConfig->academic_code ?? '-' }}</td>
+              <td class="text-center">
+                <a href="{{ route('admin.ami.indicator', ['standard_id' => $row->id]) }}" class="badge bg-primary" title="Lihat semua indikator standar ini">
+                    {{ $row->indicators_count ?? 0 }}
+                </a>
+                </td>
+
               <td class="text-center">
                 <div class="d-flex justify-content-center gap-2">
                   <button
@@ -119,7 +126,7 @@
             </tr>
           @empty
             <tr>
-              <td colspan="4" class="text-center text-muted">Belum ada standar AMI</td>
+              <td colspan="5" class="text-center text-muted">Belum ada standar AMI</td>
             </tr>
           @endforelse
         </tbody>

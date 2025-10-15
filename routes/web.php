@@ -71,8 +71,7 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'admin.byname'])->gr
     Route::put('ami/indicator/{amiIndicator}', [AmiIndicatorController::class, 'update'])->name('ami.indicator.update');
     Route::delete('ami/indicator/{amiIndicator}', [AmiIndicatorController::class, 'destroy'])->name('ami.indicator.destroy');
 
-    Route::get('ami/pic', [IndicatorPicController::class, 'index'])->name('ami.pic');
-    Route::post('ami/pic{indicator}', [IndicatorPicController::class, 'store'])->name('ami.pic.store');
+    Route::post('ami/pic/{indicator}', [IndicatorPicController::class, 'store'])->name('ami.pic.store');
     Route::put('ami/pic/{indicator}', [IndicatorPicController::class, 'update'])->name('ami.pic.update');
     Route::delete('ami/pic/{indicator}', [IndicatorPicController::class, 'destroy'])->name('ami.pic.destroy');
 });

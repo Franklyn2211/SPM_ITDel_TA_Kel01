@@ -11,6 +11,7 @@ class AmiStandardController extends Controller
     public function index()
     {
         $rows = AmiStandard::with(['academicConfig:id,academic_code,active'])
+        ->withCount('indicators')
             ->orderBy('id')
             ->paginate(20);
 

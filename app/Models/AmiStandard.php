@@ -60,7 +60,7 @@ class AmiStandard extends Model
     public function createdBy() { return $this->belongsTo(User::class, 'created_by'); }
     public function updatedBy() { return $this->belongsTo(User::class, 'updated_by'); }
     public function academicConfig() { return $this->belongsTo(AcademicConfig::class, 'academic_config_id', 'id'); }
-    public function amiStandardIndicators() { return $this->hasMany(AmiStandardIndicator::class, 'standard_id', 'id'); }
+    public function indicators() { return $this->hasMany(AmiStandardIndicator::class, 'standard_id', 'id'); }
 
     public static function generateNextId()
     {

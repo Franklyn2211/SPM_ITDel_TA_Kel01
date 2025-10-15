@@ -12,20 +12,28 @@ use Illuminate\Support\Facades\Log;
 
 class IndicatorPicController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
+        $indicatorId = $request->query('indicator_id');
+        $perPage     = in_array((int) $request->query('per_page', 20), [10,20,25,50,100], true)
+            ? (int) $request->query('per_page', 20) : 20;
+
         $indicators = AmiStandardIndicator::with(['standard:id,name'])
             ->orderBy('id')
             ->get(['id', 'description', 'standard_id']);
 
         $roles = Role::where('active', true)->orderBy('name')->get(['id', 'name']);
 
-        $rows = AmiStandardIndicator::with([
-                'standard:id,name',
-                'pics.role:id,name',
-            ])
-            ->orderBy('id')
-            ->paginate(20);
+        $rowsQ = AmiStandardIndicator::with([
+            'standard:id,name',
+            'pics.role:id,name',
+        ])->orderBy('id');
+
+        if ($indicatorId) {
+            $rowsQ->where('id', $indicatorId);
+        }
+
+        $rows = $rowsQ->paginate($perPage)->withQueryString();
 
         return view('admin.ami.pic', compact('indicators', 'roles', 'rows'));
     }
@@ -37,49 +45,55 @@ class IndicatorPicController extends Controller
             'role_ids.*' => ['exists:roles,id'],
         ]);
 
-        $indId = $indicator->id; // Explicitly use the ID
-        Log::info('Storing PIC for indicator ID: ' . $indId); // Debug log
-
-        if (!$indId) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Indikator ID tidak valid.',
-            ], 400);
-        }
-
+        $indId = $indicator->id;
         $selectedRoles = array_values(array_unique($data['role_ids']));
+        $redirectTo = route('admin.ami.indicator', ['standard_id' => $indicator->standard_id]);
 
         try {
             DB::transaction(function () use ($indId, $selectedRoles) {
-                // Delete PICs not in the new selection
+                // hapus PIC yang tidak terpilih
                 AmiStandardIndicatorPic::where('standard_indicator_id', $indId)
                     ->whereNotIn('role_id', $selectedRoles)
                     ->delete();
 
-                // Create or update PICs
+                // create jika belum ada, update aktif kalau sudah ada
                 foreach ($selectedRoles as $roleId) {
-                    $pic = AmiStandardIndicatorPic::updateOrCreate(
-                        ['standard_indicator_id' => $indId, 'role_id' => $roleId],
-                        ['id' => AmiStandardIndicatorPic::generateNextId(), 'active' => true]
-                    );
-                    Log::info('Created/Updated PIC: ', ['id' => $pic->id, 'indicator_id' => $indId, 'role_id' => $roleId]);
+                    $existing = AmiStandardIndicatorPic::where([
+                        'standard_indicator_id' => $indId,
+                        'role_id'               => $roleId,
+                    ])->first();
+
+                    if ($existing) {
+                        $existing->update(['active' => true]);
+                    } else {
+                        AmiStandardIndicatorPic::create([
+                            'id'                     => AmiStandardIndicatorPic::generateNextId(),
+                            'standard_indicator_id'  => $indId,
+                            'role_id'                => $roleId,
+                            'active'                 => true,
+                        ]);
+                    }
                 }
             });
 
-            return response()->json([
-                'success' => true,
-                'message' => 'PIC indikator berhasil disimpan.'
-            ]);
+            if ($request->expectsJson() || $request->ajax()) {
+                return response()->json(['success' => true, 'message' => 'PIC indikator berhasil disimpan.']);
+            }
+            return redirect($redirectTo)->with('success', 'PIC indikator berhasil disimpan.');
         } catch (\Exception $e) {
-            Log::error('Error saving PIC: ' . $e->getMessage(), [
+            Log::error('Error saving PIC: '.$e->getMessage(), [
                 'indicator_id' => $indId,
-                'role_ids' => $selectedRoles,
-                'trace' => $e->getTraceAsString(),
+                'role_ids'     => $selectedRoles,
+                'trace'        => $e->getTraceAsString(),
             ]);
-            return response()->json([
-                'success' => false,
-                'message' => 'Terjadi kesalahan saat menyimpan data: ' . $e->getMessage(),
-            ], 500);
+
+            if ($request->expectsJson() || $request->ajax()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Terjadi kesalahan saat menyimpan data: '.$e->getMessage(),
+                ], 500);
+            }
+            return back()->with('error', 'Terjadi kesalahan saat menyimpan data.');
         }
     }
 
@@ -90,69 +104,86 @@ class IndicatorPicController extends Controller
             'role_ids.*' => ['exists:roles,id'],
         ]);
 
-        $indId = $indicator->id; // Explicitly use the ID
-        Log::info('Updating PIC for indicator ID: ' . $indId); // Debug log
-
-        if (!$indId) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Indikator ID tidak valid.',
-            ], 400);
-        }
-
+        $indId = $indicator->id;
         $selectedRoles = array_values(array_unique($data['role_ids'] ?? []));
+        $redirectTo = route('admin.ami.indicator', ['standard_id' => $indicator->standard_id]);
 
         try {
             DB::transaction(function () use ($indId, $selectedRoles) {
                 $q = AmiStandardIndicatorPic::where('standard_indicator_id', $indId);
+
                 if (empty($selectedRoles)) {
+                    // kosongkan semua PIC
                     $q->delete();
-                } else {
-                    $q->whereNotIn('role_id', $selectedRoles)->delete();
-                    foreach ($selectedRoles as $roleId) {
-                        $pic = AmiStandardIndicatorPic::updateOrCreate(
-                            ['standard_indicator_id' => $indId, 'role_id' => $roleId],
-                            ['id' => AmiStandardIndicatorPic::generateNextId(), 'active' => true]
-                        );
-                        Log::info('Created/Updated PIC: ', ['id' => $pic->id, 'indicator_id' => $indId, 'role_id' => $roleId]);
+                    return;
+                }
+
+                // buang yang tidak dipilih
+                $q->whereNotIn('role_id', $selectedRoles)->delete();
+
+                // pastikan yang dipilih ada
+                foreach ($selectedRoles as $roleId) {
+                    $existing = AmiStandardIndicatorPic::where([
+                        'standard_indicator_id' => $indId,
+                        'role_id'               => $roleId,
+                    ])->first();
+
+                    if ($existing) {
+                        $existing->update(['active' => true]);
+                    } else {
+                        AmiStandardIndicatorPic::create([
+                            'id'                     => AmiStandardIndicatorPic::generateNextId(),
+                            'standard_indicator_id'  => $indId,
+                            'role_id'                => $roleId,
+                            'active'                 => true,
+                        ]);
                     }
                 }
             });
 
-            return response()->json([
-                'success' => true,
-                'message' => 'PIC indikator berhasil diperbarui.'
-            ]);
+            if ($request->expectsJson() || $request->ajax()) {
+                return response()->json(['success' => true, 'message' => 'PIC indikator berhasil diperbarui.']);
+            }
+            return redirect($redirectTo)->with('success', 'PIC indikator berhasil diperbarui.');
         } catch (\Exception $e) {
-            Log::error('Error updating PIC: ' . $e->getMessage(), [
+            Log::error('Error updating PIC: '.$e->getMessage(), [
                 'indicator_id' => $indId,
-                'role_ids' => $selectedRoles,
-                'trace' => $e->getTraceAsString(),
+                'role_ids'     => $selectedRoles,
+                'trace'        => $e->getTraceAsString(),
             ]);
-            return response()->json([
-                'success' => false,
-                'message' => 'Terjadi kesalahan saat memperbarui data: ' . $e->getMessage(),
-            ], 500);
+
+            if ($request->expectsJson() || $request->ajax()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Terjadi kesalahan saat memperbarui data: '.$e->getMessage(),
+                ], 500);
+            }
+            return back()->with('error', 'Terjadi kesalahan saat memperbarui data.');
         }
     }
 
-    public function destroy(AmiStandardIndicator $indicator)
+    public function destroy(Request $request, AmiStandardIndicator $indicator)
     {
         try {
-            $indId = $indicator->id;
-            AmiStandardIndicatorPic::where('standard_indicator_id', $indId)->delete();
+            AmiStandardIndicatorPic::where('standard_indicator_id', $indicator->id)->delete();
 
+            if ($request->expectsJson() || $request->ajax()) {
+                return response()->json(['success' => true, 'message' => 'PIC indikator berhasil dihapus.']);
+            }
+            return back()->with('success', 'PIC indikator berhasil dihapus.');
         } catch (\Exception $e) {
-            Log::error('Error deleting PIC: ' . $e->getMessage(), [
+            Log::error('Error deleting PIC: '.$e->getMessage(), [
                 'indicator_id' => $indicator->id,
-                'trace' => $e->getTraceAsString(),
+                'trace'        => $e->getTraceAsString(),
             ]);
-            return response()->json([
-                'success' => false,
-                'message' => 'Terjadi kesalahan saat menghapus data: ' . $e->getMessage(),
-            ], 500);
-        }
 
-        return back()->with('success', 'PIC indikator berhasil dihapus.');
+            if ($request->expectsJson() || $request->ajax()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Terjadi kesalahan saat menghapus data: '.$e->getMessage(),
+                ], 500);
+            }
+            return back()->with('error', 'Terjadi kesalahan saat menghapus data.');
+        }
     }
 }
