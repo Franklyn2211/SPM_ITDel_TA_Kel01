@@ -1,4 +1,4 @@
-@extends('auditee.layouts.app')
+@extends('admin.layouts.app')
 @section('title', 'Assign PIC Indikator')
 
 @section('page-header')
@@ -18,7 +18,7 @@
   <div class="page-header-content border-top">
     <div class="d-flex align-items-center">
       <div class="breadcrumb py-2">
-        <a href="{{ route('auditee.dashboard') }}" class="breadcrumb-item"><i class="ph-house"></i></a>
+        <a href="{{ route('admin.dashboard') }}" class="breadcrumb-item"><i class="ph-house"></i></a>
         <span class="breadcrumb-item active">Assign PIC Indikator</span>
       </div>
     </div>
@@ -115,11 +115,11 @@
                       data-mode="edit"
                       data-id="{{ $row->id }}"
                       data-roles='@json($roleIds)'
-                      data-action="{{ route('auditee.ami.pic.update', $row->id) }}">
+                      data-action="{{ route('admin.ami.pic.update', $row->id) }}">
                       <i class="ph-pencil me-1"></i> Ubah PIC
                     </button>
 
-                    <form method="POST" action="{{ route('auditee.ami.pic.destroy', $row->id) }}"
+                    <form method="POST" action="{{ route('admin.ami.pic.destroy', $row->id) }}"
                           onsubmit="return confirm('Hapus semua PIC untuk indikator ini?');" class="d-inline">
                       @csrf
                       @method('DELETE')
@@ -133,7 +133,7 @@
                       data-mode="create"
                       data-id="{{ $row->id }}"
                       data-roles='[]'
-                      data-action="{{ route('auditee.ami.pic.store', $row->id) }}">
+                      data-action="{{ route('admin.ami.pic.store', $row->id) }}">
                       <i class="ph-plus me-1"></i> Tambah PIC
                     </button>
                   @endif

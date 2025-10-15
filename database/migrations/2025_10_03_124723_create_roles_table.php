@@ -11,12 +11,12 @@ return new class extends Migration
         Schema::create('roles', function (Blueprint $table) {
             $table->string('id')->primary();
             $table->string('name');
-            $table->string('category_detail_id');
+            $table->string('category_id');
             $table->unsignedBigInteger('created_by')->nullable();
             $table->unsignedBigInteger('updated_by')->nullable();
             $table->boolean('active')->default(true);
             $table->timestamps();
-            $table->foreign('category_detail_id')->references('id')->on('ref_category_details')->cascadeOnDelete();
+            $table->foreign('category_id')->references('id')->on('ref_categories')->cascadeOnDelete();
             $table->foreign('created_by')->references('id')->on('users')->nullOnDelete();
             $table->foreign('updated_by')->references('id')->on('users')->nullOnDelete();
         });

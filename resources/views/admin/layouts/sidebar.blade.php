@@ -52,22 +52,11 @@
             </li>
           </ul>
         </li>
-
-        {{-- Forms (contoh ringkas) --}}
-        <li class="nav-item-header">
-          <div class="text-uppercase fs-sm lh-sm opacity-50 sidebar-resize-hide">Forms</div>
-          <i class="ph-dots-three sidebar-resize-show"></i>
-        </li>
-        <li class="nav-item nav-item-submenu">
-          <a href="#" class="nav-link">
-            <i class="ph-note-pencil"></i>
-            <span>Form components</span>
-          </a>
-          <ul class="nav-group-sub collapse">
-            <li class="nav-item"><a href="{{ url('/forms/inputs') }}" class="nav-link">Input fields</a></li>
-            <li class="nav-item"><a href="{{ url('/forms/select') }}" class="nav-link">Selects</a></li>
-            <li class="nav-item"><a href="{{ url('/forms/validation') }}" class="nav-link">Validation</a></li>
-          </ul>
+        <li class="nav-item">
+            <a href="{{ route('admin.ami.standard') }}" class="nav-link">
+                <i class="ph-layout"></i>
+                <span>Standar AMI</span>
+            </a>
         </li>
 
         {{-- Components (contoh ringkas) --}}

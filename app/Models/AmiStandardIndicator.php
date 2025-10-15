@@ -72,7 +72,7 @@ class AmiStandardIndicator extends Model
         $nextNumber = $maxNum + 1;
 
         // Check if the next number already exists
-        $nextId = 'ASI' . str_pad((string)$nextNumber, 3, '0', STR_PAD_LEFT);
+        $nextId = 'ASI' . str_pad((string) $nextNumber, 3, '0', STR_PAD_LEFT);
 
         // If the ID already exists, recursively call the method until we get a unique one
         if (self::where('id', $nextId)->exists()) {

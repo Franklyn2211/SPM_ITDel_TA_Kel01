@@ -13,6 +13,7 @@ return new class extends Migration
             $table->string('cis_user_id');                   // FK -> users.cis_user_id (pastikan kolom itu ada & unique/indexed)
             $table->string('role_id');                       // FK -> roles.id
             $table->string('academic_config_id');            // FK -> academic_configs.id
+            $table->string('category_detail_id');
             $table->unsignedBigInteger('created_by')->nullable();
             $table->unsignedBigInteger('updated_by')->nullable();
             $table->boolean('active')->default(true);
@@ -33,6 +34,10 @@ return new class extends Migration
                   ->cascadeOnUpdate()
                   ->cascadeOnDelete();
 
+            $table->foreign('category_detail_id')
+                  ->references('id')->on('ref_category_details')
+                  ->cascadeOnDelete();
+
             $table->foreign('created_by')
                   ->references('id')->on('users')
                   ->nullOnDelete();
@@ -49,6 +54,7 @@ return new class extends Migration
             $table->index('cis_user_id');
             $table->index('role_id');
             $table->index('academic_config_id');
+            $table->index('category_detail_id');
         });
     }
 

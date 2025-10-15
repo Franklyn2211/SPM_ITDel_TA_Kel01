@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Controllers\Auditee;
+namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\AmiStandard;
@@ -14,7 +14,7 @@ class AmiStandardController extends Controller
             ->orderBy('id')
             ->paginate(20);
 
-        return view('auditee.ami.standard', compact('rows'));
+        return view('admin.ami.standard', compact('rows'));
     }
 
     public function store(Request $request)
@@ -29,7 +29,7 @@ class AmiStandardController extends Controller
         ]);
 
         $amiStandard->save();
-        return redirect()->route('auditee.ami.standard')->with('success', 'AMI Standard created successfully.');
+        return redirect()->route('admin.ami.standard')->with('success', 'AMI Standard created successfully.');
     }
 
     public function update(Request $request, AmiStandard $amiStandard)
@@ -44,13 +44,13 @@ class AmiStandardController extends Controller
 
         $amiStandard->update($data);
 
-        return redirect()->route('auditee.ami.standard')->with('success', 'AMI Standard updated successfully.');
+        return redirect()->route('admin.ami.standard')->with('success', 'AMI Standard updated successfully.');
     }
 
     public function destroy($id)
     {
         $amiStandard = AmiStandard::findOrFail($id);
         $amiStandard->delete();
-        return redirect()->route('auditee.ami.standard')->with('success', 'AMI Standard deleted successfully.');
+        return redirect()->route('admin.ami.standard')->with('success', 'AMI Standard deleted successfully.');
     }
 }

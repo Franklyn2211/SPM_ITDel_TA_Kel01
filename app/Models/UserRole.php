@@ -17,6 +17,7 @@ class UserRole extends Model
         'cis_user_id',
         'role_id',
         'academic_config_id',
+        'category_detail_id',
         'created_by',
         'updated_by',
         'active',
@@ -58,6 +59,10 @@ class UserRole extends Model
     {
         return $this->belongsTo(AcademicConfig::class, 'academic_config_id', 'id');
     }
+    public function categoryDetail()
+    {
+        return $this->belongsTo(RefCategoryDetail::class, 'category_detail_id', 'id');
+    }
     public function createdBy()
     {
         return $this->belongsTo(User::class, 'created_by', 'id');
@@ -65,7 +70,7 @@ class UserRole extends Model
     public function updatedBy()
     {
         return $this->belongsTo(User::class, 'updated_by', 'id');
-    }   
+    }
     public static function generateNextId()
     {
         // Mendapatkan ID terakhir dari database

@@ -1,5 +1,5 @@
-{{-- resources/views/auditee/ami/standard.blade.php --}}
-@extends('auditee.layouts.app') {{-- pakai layout yang sama biar seragam tampilan --}}
+{{-- resources/views/admin/ami/standard.blade.php --}}
+@extends('admin.layouts.app') {{-- pakai layout yang sama biar seragam tampilan --}}
 @section('title', 'Standar AMI')
 
 @section('page-header')
@@ -25,7 +25,7 @@
   <div class="page-header-content border-top">
     <div class="d-flex align-items-center">
       <div class="breadcrumb py-2">
-        <a href="{{ route('auditee.dashboard') }}" class="breadcrumb-item"><i class="ph-house"></i></a>
+        <a href="{{ route('admin.dashboard') }}" class="breadcrumb-item"><i class="ph-house"></i></a>
         <span class="breadcrumb-item active">Standar AMI</span>
       </div>
     </div>
@@ -102,7 +102,7 @@
                     onclick="openEditStandardModal(
                       {{ Js::from($row->id) }},
                       {{ Js::from($row->name) }},
-                      '{{ route('auditee.ami.standard.update', $row->id) }}'
+                      '{{ route('admin.ami.standard.update', $row->id) }}'
                     )">
                     <i class="ph-pencil"></i>
                   </button>
@@ -111,7 +111,7 @@
                     type="button"
                     class="btn btn-danger btn-icon"
                     title="Hapus"
-                    onclick="confirmDelete('{{ route('auditee.ami.standard.destroy', $row->id) }}')">
+                    onclick="confirmDelete('{{ route('admin.ami.standard.destroy', $row->id) }}')">
                     <i class="ph-trash"></i>
                   </button>
                 </div>
@@ -142,7 +142,7 @@
 {{-- Modal: Create --}}
 <div class="modal fade" id="modalCreateStandard" tabindex="-1">
   <div class="modal-dialog">
-    <form method="POST" action="{{ route('auditee.ami.standard.store') }}" class="modal-content">
+    <form method="POST" action="{{ route('admin.ami.standard.store') }}" class="modal-content">
       @csrf
       <div class="modal-header">
         <h5 class="modal-title">Tambah Standar AMI</h5>

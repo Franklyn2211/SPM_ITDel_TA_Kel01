@@ -4,14 +4,12 @@ use App\Http\Controllers\Admin\AcademicConfigController;
 use App\Http\Controllers\Admin\CisSyncController;
 use App\Http\Controllers\Admin\RefCategoryController;
 use App\Http\Controllers\Admin\RefCategoryDetailController;
-use App\Http\Controllers\Admin\RoleController;
 use App\Http\Controllers\Admin\RolesController;
 use App\Http\Controllers\Admin\UserRoleController;
-use App\Http\Controllers\Auditee\AmiIndicatorController;
-use App\Http\Controllers\Auditee\AmiStandardController;
-use App\Http\Controllers\Auditee\IndicatorPicController;
+use App\Http\Controllers\Admin\AmiIndicatorController;
+use App\Http\Controllers\Admin\AmiStandardController;
+use App\Http\Controllers\Admin\IndicatorPicController;
 use App\Http\Controllers\UnifiedAuthController;
-use App\Models\UserRole;
 use Illuminate\Support\Facades\Route;
 
 // Landing (public)
@@ -25,20 +23,6 @@ Route::post('/logout', [UnifiedAuthController::class, 'logout'])->name('logout')
 Route::prefix('auditee')->name('auditee.')->middleware(['auth', 'role:Auditee'])->group(function () {
     Route::get('/dashboard', fn() => view('auditee.dashboard'))->name('dashboard');
 
-    Route::get('ami/standard', [AmiStandardController::class, 'index'])->name('ami.standard');
-    Route::post('ami/standard', [AmiStandardController::class, 'store'])->name('ami.standard.store');
-    Route::put('ami/standard/{amiStandard}', [AmiStandardController::class, 'update'])->name('ami.standard.update');
-    Route::delete('ami/standard/{amiStandard}', [AmiStandardController::class, 'destroy'])->name('ami.standard.destroy');
-
-    Route::get('ami/indicator', [AmiIndicatorController::class, 'index'])->name('ami.indicator');
-    Route::post('ami/indicator', [AmiIndicatorController::class, 'store'])->name('ami.indicator.store');
-    Route::put('ami/indicator/{amiIndicator}', [AmiIndicatorController::class, 'update'])->name('ami.indicator.update');
-    Route::delete('ami/indicator/{amiIndicator}', [AmiIndicatorController::class, 'destroy'])->name('ami.indicator.destroy');
-
-    Route::get('ami/pic', [IndicatorPicController::class, 'index'])->name('ami.pic');
-    Route::post('ami/pic{indicator}', [IndicatorPicController::class, 'store'])->name('ami.pic.store');
-    Route::put('ami/pic/{indicator}', [IndicatorPicController::class, 'update'])->name('ami.pic.update');
-    Route::delete('ami/pic/{indicator}', [IndicatorPicController::class, 'destroy'])->name('ami.pic.destroy');
     // Tambahkan route user lain di sini kalau ada
 });
 
@@ -76,4 +60,19 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'admin.byname'])->gr
     Route::post('roles', [RolesController::class, 'store'])->name('roles.store');
     Route::put('roles/{role}', [RolesController::class, 'update'])->name('roles.update');
     Route::delete('roles/{role}', [RolesController::class, 'destroy'])->name('roles.destroy');
+
+    Route::get('ami/standard', [AmiStandardController::class, 'index'])->name('ami.standard');
+    Route::post('ami/standard', [AmiStandardController::class, 'store'])->name('ami.standard.store');
+    Route::put('ami/standard/{amiStandard}', [AmiStandardController::class, 'update'])->name('ami.standard.update');
+    Route::delete('ami/standard/{amiStandard}', [AmiStandardController::class, 'destroy'])->name('ami.standard.destroy');
+
+    Route::get('ami/indicator', [AmiIndicatorController::class, 'index'])->name('ami.indicator');
+    Route::post('ami/indicator', [AmiIndicatorController::class, 'store'])->name('ami.indicator.store');
+    Route::put('ami/indicator/{amiIndicator}', [AmiIndicatorController::class, 'update'])->name('ami.indicator.update');
+    Route::delete('ami/indicator/{amiIndicator}', [AmiIndicatorController::class, 'destroy'])->name('ami.indicator.destroy');
+
+    Route::get('ami/pic', [IndicatorPicController::class, 'index'])->name('ami.pic');
+    Route::post('ami/pic{indicator}', [IndicatorPicController::class, 'store'])->name('ami.pic.store');
+    Route::put('ami/pic/{indicator}', [IndicatorPicController::class, 'update'])->name('ami.pic.update');
+    Route::delete('ami/pic/{indicator}', [IndicatorPicController::class, 'destroy'])->name('ami.pic.destroy');
 });

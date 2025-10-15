@@ -92,7 +92,7 @@
             <th>Username</th>
             <th>Nama</th>
             <th>Email</th>
-            <th>Role & Tahun Akademik</th>
+            <th>Role & Detail Kategori</th>
             <th class="text-center" style="width:120px;">Aksi</th>
           </tr>
         </thead>
@@ -109,12 +109,14 @@
                       'ac_code'   => $ac?->academic_code,
                       'roles'     => $items->pluck('role.name')->filter()->values(),
                       'role_ids'  => $items->pluck('role_id')->values(),
+                    'c_detail_id' => $items->pluck('category_detail_id')->values(),
                   ];
               })
               ->values();
 
             $firstRole      = $u->roles->first();
             $defaultAcId    = $firstRole?->academicConfig?->id;
+            $defaultCdId    = $firstRole?->category_detail_id;
             $defaultRoleIds = $defaultAcId
               ? $u->roles->where('academic_config_id',$defaultAcId)->pluck('role_id')->values()
               : collect();
@@ -134,6 +136,10 @@
                       @foreach($g['roles'] as $rn)
                         <span class="badge bg-primary">{{ $rn }}</span>
                       @endforeach
+                        {{-- Detail Kategori --}}
+                        @foreach($g['c_detail_id'] as $cdId)
+                          <span class="badge bg-info text-dark">{{ $categoryDetail->firstWhere('id', $cdId)->name ?? '-' }}</span>
+                        @endforeach
                     </div>
                   @endforeach
                 </div>
@@ -194,6 +200,16 @@
           </select>
           @error('academic_config_id') <div class="text-danger small mt-1">{{ $message }}</div> @enderror
         </div>
+
+        <div class="mb-3">
+          <label class="form-label">Detail Kategori</label>
+          <select name="category_detail_id" id="assign_category_detail" class="form-select" required>
+            <option value="" selected disabled>Pilih detail kategori…</option>
+            @foreach($categoryDetail as $cd)
+              <option value="{{ $cd->id }}">{{ $cd->name }}</option>
+            @endforeach
+          </select>
+          @error('category_detail_id') <div class="text-danger small mt-1">{{ $message }}</div> @enderror
 
         <div class="mb-3">
           <label class="form-label">Role (bisa pilih lebih dari satu)</label>
@@ -283,6 +299,7 @@
         // Restore nilai lama
         const oldCis = @json(old('cis_user_id', ''));
         const oldAc  = @json(old('academic_config_id', ''));
+        const oldCd  = @json(old('category_detail_id', ''));
         const oldRs  = @json(old('role_ids', []));
 
         document.getElementById('assign_cis_user_id').value = oldCis;

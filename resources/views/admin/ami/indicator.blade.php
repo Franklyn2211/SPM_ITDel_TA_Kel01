@@ -1,5 +1,5 @@
-{{-- resources/views/auditee/ami/indicator.blade.php --}}
-@extends('auditee.layouts.app')
+{{-- resources/views/admin/ami/indicator.blade.php --}}
+@extends('admin.layouts.app')
 @section('title', 'Indikator Standar AMI')
 
 @section('page-header')
@@ -25,7 +25,7 @@
   <div class="page-header-content border-top">
     <div class="d-flex align-items-center">
       <div class="breadcrumb py-2">
-        <a href="{{ route('auditee.dashboard') }}" class="breadcrumb-item"><i class="ph-house"></i></a>
+        <a href="{{ route('admin.dashboard') }}" class="breadcrumb-item"><i class="ph-house"></i></a>
         <span class="breadcrumb-item active">Indikator Standar AMI</span>
       </div>
     </div>
@@ -108,7 +108,7 @@
                     {{ Js::from($row->id) }},
                     {{ Js::from($row->description) }},
                     {{ Js::from($row->standard_id) }},
-                    '{{ route('auditee.ami.indicator.update', $row->id) }}'
+                    '{{ route('admin.ami.indicator.update', $row->id) }}'
                   )">
                   <i class="ph-pencil"></i>
                 </button>
@@ -117,7 +117,7 @@
                   type="button"
                   class="btn btn-danger btn-icon"
                   title="Hapus"
-                  onclick="confirmDelete('{{ route('auditee.ami.indicator.destroy', $row->id) }}')">
+                  onclick="confirmDelete('{{ route('admin.ami.indicator.destroy', $row->id) }}')">
                   <i class="ph-trash"></i>
                 </button>
               </div>
@@ -148,7 +148,7 @@
 {{-- Modal: Create --}}
 <div class="modal fade" id="modalCreateIndicator" tabindex="-1">
   <div class="modal-dialog">
-    <form method="POST" action="{{ route('auditee.ami.indicator.store') }}" class="modal-content">
+    <form method="POST" action="{{ route('admin.ami.indicator.store') }}" class="modal-content">
       @csrf
       <div class="modal-header">
         <h5 class="modal-title">Tambah Indikator</h5>

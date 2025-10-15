@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Controllers\Auditee;
+namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\AmiStandard;
@@ -23,7 +23,7 @@ class AmiIndicatorController extends Controller
             ->orderBy('name')
             ->get(['id', 'name', 'academic_config_id']);
 
-        return view('auditee.ami.indicator', compact('rows', 'standards'));
+        return view('admin.ami.indicator', compact('rows', 'standards'));
     }
 
     public function store(Request $request)
@@ -35,7 +35,7 @@ class AmiIndicatorController extends Controller
 
         $std = AmiStandard::with('academicConfig:id,active')->findOrFail($request->get('standard_id'));
         if (!$std->academicConfig || !$std->academicConfig->active) {
-            return redirect()->route('auditee.ami.indicator')->with('error', 'The selected standard is not associated with an active Academic Config.');
+            return redirect()->route('admin.ami.indicator')->with('error', 'The selected standard is not associated with an active Academic Config.');
         }
 
         $amiIndicator = new AmiStandardIndicator([
@@ -45,7 +45,7 @@ class AmiIndicatorController extends Controller
         ]);
 
         $amiIndicator->save();
-        return redirect()->route('auditee.ami.indicator')->with('success', 'AMI Indicator created successfully.');
+        return redirect()->route('admin.ami.indicator')->with('success', 'AMI Indicator created successfully.');
     }
 
     public function update(Request $request, AmiStandardIndicator $amiIndicator)
@@ -57,7 +57,7 @@ class AmiIndicatorController extends Controller
 
         $std = AmiStandard::with('academicConfig:id,active')->findOrFail($request->get('standard_id'));
         if (!$std->academicConfig || !$std->academicConfig->active) {
-            return redirect()->route('auditee.ami.indicator')->with('error', 'The selected standard is not associated with an active Academic Config.');
+            return redirect()->route('admin.ami.indicator')->with('error', 'The selected standard is not associated with an active Academic Config.');
         }
 
         $data = [
@@ -67,13 +67,13 @@ class AmiIndicatorController extends Controller
 
         $amiIndicator->update($data);
 
-        return redirect()->route('auditee.ami.indicator')->with('success', 'AMI Indicator updated successfully.');
+        return redirect()->route('admin.ami.indicator')->with('success', 'AMI Indicator updated successfully.');
     }
 
     public function destroy($id)
     {
         $amiIndicator = AmiStandardIndicator::findOrFail($id);
         $amiIndicator->delete();
-        return redirect()->route('auditee.ami.indicator')->with('success', 'AMI Indicator deleted successfully.');
+        return redirect()->route('admin.ami.indicator')->with('success', 'AMI Indicator deleted successfully.');
     }
 }

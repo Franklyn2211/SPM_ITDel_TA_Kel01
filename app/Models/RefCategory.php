@@ -39,18 +39,23 @@ class RefCategory extends Model
 
     public static function generateNextId()
     {
-        // Mendapatkan ID terakhir dari database
-        $latestId = self::orderBy('id', 'desc')->first();
+       // Ambil nomor terbesar berdasarkan angka setelah prefix "ASI"
+        $maxNum = (int) self::where('id', 'like', 'C%')
+            ->selectRaw("MAX(CAST(SUBSTRING(id, 4) AS UNSIGNED)) as maxnum")
+            ->value('maxnum');
 
-        // Mengambil nomor dari ID terakhir
-        $lastNumber = $latestId ? intval(substr($latestId->id_news, 1)) : 0;
+        // Increment the number by 1
+        $nextNumber = $maxNum + 1;
 
-        // Menambahkan 1 untuk mendapatkan nomor berikutnya
-        $nextNumber = $lastNumber + 1;
+        // Check if the next number already exists
+        $nextId = 'C' . str_pad((string)$nextNumber, 3, '0', STR_PAD_LEFT);
 
-        // Mengonversi nomor berikutnya ke format yang diinginkan (NXX)
-        $nextId = 'C' . str_pad($nextNumber, 3, '0', STR_PAD_LEFT);
+        // If the ID already exists, recursively call the method until we get a unique one
+        if (self::where('id', $nextId)->exists()) {
+            return self::generateNextId(); // Recursive call until a unique ID is generated
+        }
 
+        // Return the unique ID
         return $nextId;
     }
 

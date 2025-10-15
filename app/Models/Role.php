@@ -15,7 +15,7 @@ class Role extends Model
     protected $fillable = [
         'id',
         'name',
-        'category_detail_id',
+        'category_id',
         'created_by',
         'updated_by',
         'active',
@@ -43,9 +43,9 @@ class Role extends Model
     public function createdBy() { return $this->belongsTo(User::class, 'created_by'); }
     public function updatedBy() { return $this->belongsTo(User::class, 'updated_by'); }
     // Relasi dengan RefCategoryDetail
-    public function categoryDetail()
+    public function category()
     {
-        return $this->belongsTo(RefCategoryDetail::class, 'category_detail_id', 'id');
+        return $this->belongsTo(RefCategory::class, 'category_id', 'id');
     }
 
     // Relasi dengan UserRole

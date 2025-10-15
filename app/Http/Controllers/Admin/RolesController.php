@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\RefCategoryDetail;
+use App\Models\RefCategory;
 use App\Models\Role;
 use Illuminate\Http\Request;
 
@@ -11,9 +11,9 @@ class RolesController extends Controller
 {
     public function index()
     {
-        $categoryDetails = RefCategoryDetail::all();
+        $category = RefCategory::all();
         $roles = Role::all();
-        return view('admin.roles.add', ['roles' => $roles, 'categoryDetails' => $categoryDetails]);
+        return view('admin.roles.add', ['roles' => $roles, 'category' => $category]);
     }
 
     public function store(Request $request)
@@ -27,8 +27,8 @@ class RolesController extends Controller
             'name' => $request->get('name'),
         ]);
 
-        $categoryDetail = RefCategoryDetail::findOrFail($request->get('category_detail_id'));
-        $role->categoryDetail()->associate($categoryDetail);
+        $category = RefCategory::findOrFail($request->get('category_id'));
+        $role->category()->associate($category);
 
         $role->save();
         return redirect()->route('admin.roles.add')->with('success', 'Role created successfully.');
@@ -44,9 +44,9 @@ class RolesController extends Controller
             'name' => $request->get('name')
         ];
 
-        if ($request->has('category_detail_id')) {
-            $categoryDetail = RefCategoryDetail::findOrFail($request->get('category_detail_id'));
-            $role->categoryDetail()->associate($categoryDetail);
+        if ($request->has('category_id')) {
+            $category = RefCategory::findOrFail($request->get('category_id'));
+            $role->category()->associate($category);
         }
 
         $role->update($data);

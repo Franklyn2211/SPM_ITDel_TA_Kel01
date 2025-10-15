@@ -60,7 +60,7 @@
           <tr>
             <th class="text-center" width="50">No</th>
             <th>Nama Role</th>
-            <th>Detail Kategori</th>
+            <th>Kategori</th>
             <th class="text-center" width="160">Aksi</th>
           </tr>
         </thead>
@@ -69,7 +69,7 @@
           <tr>
             <td class="text-center">{{ $loop->iteration }}</td>
             <td>{{ $role->name }}</td>
-            <td>{{ $role->categoryDetail->name ?? '-' }}</td>
+            <td>{{ $role->category->name ?? '-' }}</td>
             <td class="text-center">
               <div class="d-flex justify-content-center gap-2">
                 {{-- Tombol Edit: pakai data-attributes --}}
@@ -81,7 +81,7 @@
                   data-bs-target="#modalEditRole"
                   data-id="{{ $role->id }}"
                   data-name="{{ $role->name }}"
-                  data-cdetail="{{ $role->category_detail_id }}"
+                  data-cdetail="{{ $role->category_id }}"
                   data-action="{{ route('admin.roles.update', $role->id) }}"
                 >
                   <i class="ph-pencil"></i>
@@ -123,10 +123,10 @@
         </div>
 
         <div class="mb-3">
-          <label class="form-label">Detail Kategori</label>
-          <select name="category_detail_id" class="form-select" required>
-            <option value="" selected disabled>Pilih detail kategori…</option>
-            @foreach($categoryDetails as $cd)
+          <label class="form-label">Kategori</label>
+          <select name="category_id" class="form-select" required>
+            <option value="" selected disabled>Pilih kategori…</option>
+            @foreach($category as $cd)
               <option value="{{ $cd->id }}">{{ $cd->name }}</option>
             @endforeach
           </select>
@@ -160,10 +160,10 @@
         </div>
 
         <div class="mb-3">
-          <label class="form-label">Detail Kategori</label>
-          <select name="category_detail_id" class="form-select" id="edit_category_detail_id" required>
-            <option value="" disabled>Pilih detail kategori…</option>
-            @foreach($categoryDetails as $cd)
+          <label class="form-label">Kategori</label>
+          <select name="category_id" class="form-select" id="edit_category_id" required>
+            <option value="" disabled>Pilih kategori…</option>
+            @foreach($category as $cd)
               <option value="{{ $cd->id }}">{{ $cd->name }}</option>
             @endforeach
           </select>
@@ -202,7 +202,7 @@
       const action = btn.getAttribute('data-action') || '';
 
       const nameInput = editRoleModal.querySelector('#edit_name');
-      const cdetSelect= editRoleModal.querySelector('#edit_category_detail_id');
+      const cdetSelect= editRoleModal.querySelector('#edit_category_id');
       const form      = document.getElementById('formEditRole');
 
       if (nameInput)  nameInput.value = name;

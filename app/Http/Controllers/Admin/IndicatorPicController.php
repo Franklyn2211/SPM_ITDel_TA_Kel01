@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Controllers\Auditee;
+namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\AmiStandardIndicator;
@@ -27,7 +27,7 @@ class IndicatorPicController extends Controller
             ->orderBy('id')
             ->paginate(20);
 
-        return view('auditee.ami.pic', compact('indicators', 'roles', 'rows'));
+        return view('admin.ami.pic', compact('indicators', 'roles', 'rows'));
     }
 
     public function store(Request $request, AmiStandardIndicator $indicator)
