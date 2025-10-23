@@ -82,7 +82,7 @@
                 </button>
 
                 <button type="button" class="btn btn-danger btn-icon" title="Hapus"
-                  onclick="confirmDelete(@json(route('admin.ref_category.detail.destroy', $detail->id)))">
+                  onclick="confirmDelete('{{route('admin.ref_category.detail.destroy', $detail->id)}}')'">
                   <i class="ph-trash"></i>
                 </button>
               </div>

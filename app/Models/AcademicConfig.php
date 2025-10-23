@@ -26,6 +26,14 @@ class AcademicConfig extends Model
 
     protected static function booted(): void
     {
+        static::saving(function (AcademicConfig $model) {
+        // Kalau entri ini mau diaktifkan, matikan yang lain
+        if ($model->active) {
+            static::where('id', '!=', $model->id)
+                ->where('active', true)
+                ->update(['active' => false]);
+        }
+    });
         static::creating(function ($model) {
             if (Auth::check()) {
                 // isi otomatis saat create

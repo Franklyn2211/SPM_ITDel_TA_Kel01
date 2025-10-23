@@ -89,7 +89,7 @@
 
                 {{-- Tombol Hapus --}}
                 <button type="button" class="btn btn-danger btn-icon" title="Hapus"
-                  onclick="confirmDelete(@json(route('admin.roles.destroy', $role->id)))">
+                  onclick="confirmDelete('{{ route('admin.roles.destroy', $role->id)}}')">
                   <i class="ph-trash"></i>
                 </button>
               </div>
