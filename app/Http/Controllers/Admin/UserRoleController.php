@@ -30,7 +30,8 @@ class UserRoleController extends Controller
             ->with(['roles' => function ($qr) {
                 $qr->where('active', true)
                    ->with([
-                       'role:id,name',
+                       'role:id,name,category_id',
+                       'role.category:id,name',
                        'academicConfig:id,academic_code',
                        'categoryDetail:id,name',
                    ])
@@ -40,7 +41,9 @@ class UserRoleController extends Controller
             ->paginate(20)
             ->withQueryString();
 
-        $roles     = Role::orderBy('name')->get(['id','name']);
+$roles = Role::with('category:id,name')
+    ->orderBy('name')
+    ->get(['id','name','category_id']);
         $academics = AcademicConfig::orderBy('academic_code','desc')->get(['id','academic_code']);
         $categoryDetail = RefCategoryDetail::orderBy('name')->get(['id','name']);
 

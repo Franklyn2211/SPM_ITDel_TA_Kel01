@@ -210,18 +210,21 @@
             @endforeach
           </select>
           @error('category_detail_id') <div class="text-danger small mt-1">{{ $message }}</div> @enderror
-
-        <div class="mb-3">
-          <label class="form-label">Role (bisa pilih lebih dari satu)</label>
-          <select name="role_ids[]" id="assign_roles" class="form-select" multiple required size="6">
-            @foreach($roles as $r)
-              <option value="{{ $r->id }}">{{ $r->name }}</option>
-            @endforeach
-          </select>
-          @error('role_ids') <div class="text-danger small mt-1">{{ $message }}</div> @enderror
-          @error('role_ids.*') <div class="text-danger small mt-1">{{ $message }}</div> @enderror
         </div>
-      </div>
+<div class="mb-3">
+  <label class="form-label">Role (bisa pilih lebih dari satu)</label>
+  <select name="role_ids[]" id="assign_roles" class="form-select" multiple required size="6">
+    @foreach($roles as $r)
+      @php $cat = $r->category?->name; @endphp
+      <option value="{{ $r->id }}">
+        {{ $r->name }}@if($cat) ({{ $cat }}) @endif
+      </option>
+    @endforeach
+  </select>
+  @error('role_ids') <div class="text-danger small mt-1">{{ $message }}</div> @enderror
+  @error('role_ids.*') <div class="text-danger small mt-1">{{ $message }}</div> @enderror
+</div>
+
 
       <div class="modal-footer">
         <button type="button" class="btn btn-link" data-bs-dismiss="modal">Batal</button>
