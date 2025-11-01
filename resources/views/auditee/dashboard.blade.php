@@ -2,7 +2,7 @@
 
 @section('title', 'Dashboard - Sistem Penjaminan Mutu')
 
-{{-- Page Header (di-render di dalam content-wrapper) --}}
+{{-- Page Header --}}
 @section('page-header')
 <div class="page-header page-header-light shadow">
   <div class="page-header-content d-lg-flex">
@@ -39,7 +39,7 @@
   <div class="page-header-content border-top">
     <div class="d-flex align-items-center">
       <div class="breadcrumb py-2">
-        <a href="{{ url('/') }}" class="breadcrumb-item"><i class="ph-house"></i></a>
+        <a href="{{ route('auditee.dashboard') }}" class="breadcrumb-item"><i class="ph-house"></i></a>
         <a href="#" class="breadcrumb-item">Home</a>
         <span class="breadcrumb-item active">Dashboard</span>
       </div>
@@ -49,381 +49,289 @@
 @endsection
 
 @section('content')
-  {{-- MAIN ROW --}}
-  <div class="row">
-    <div class="col-xl-8">
+<div class="row">
+  <div class="col-xl-8">
 
-      {{-- Marketing summary (ringkas) --}}
-      <div class="card">
-        <div class="card-header d-flex align-items-center">
-          <h5 class="mb-0">Marketing campaigns</h5>
-          <div class="ms-auto">
-            <span class="badge bg-success rounded-pill">28 active</span>
-          </div>
-        </div>
-
-        <div class="table-responsive">
-          <table class="table text-nowrap">
-            <thead>
-              <tr>
-                <th>Campaign</th>
-                <th>Client</th>
-                <th>Changes</th>
-                <th>Budget</th>
-                <th>Status</th>
-                <th class="text-center" style="width: 20px;">
-                  <i class="ph-dots-three"></i>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr class="table-light">
-                <td colspan="5">Today</td>
-                <td class="text-end">
-                  <div class="progress" style="height:6px;">
-                    <div class="progress-bar bg-primary" style="width:30%"></div>
-                  </div>
-                </td>
-              </tr>
-
-              <tr>
-                <td>
-                  <div class="d-flex align-items-center">
-                    <a href="#" class="d-block me-3">
-                      <img src="{{ asset('assets/images/brands/facebook.svg') }}" class="rounded-circle" width="36" height="36" alt="">
-                    </a>
-                    <div>
-                      <a href="#" class="text-body fw-semibold">Facebook</a>
-                      <div class="text-muted fs-sm">
-                        <span class="d-inline-block bg-primary rounded-pill p-1 me-1"></span>
-                        02:00 - 03:00
-                      </div>
-                    </div>
-                  </div>
-                </td>
-                <td><span class="text-muted">Mintlime</span></td>
-                <td><span class="text-success"><i class="ph-trend-up me-2"></i> 2.43%</span></td>
-                <td><h6 class="mb-0">$5,489</h6></td>
-                <td><span class="badge bg-primary bg-opacity-10 text-primary">Active</span></td>
-                <td class="text-center">
-                  <button class="btn btn-sm btn-light"><i class="ph-list"></i></button>
-                </td>
-              </tr>
-
-              <tr>
-                <td>
-                  <div class="d-flex align-items-center">
-                    <a href="#" class="d-block me-3">
-                      <img src="{{ asset('assets/images/brands/youtube.svg') }}" class="rounded-circle" width="36" height="36" alt="">
-                    </a>
-                    <div>
-                      <a href="#" class="text-body fw-semibold">YouTube</a>
-                      <div class="text-muted fs-sm">
-                        <span class="d-inline-block bg-danger rounded-pill p-1 me-1"></span>
-                        13:00 - 14:00
-                      </div>
-                    </div>
-                  </div>
-                </td>
-                <td><span class="text-muted">CDsoft</span></td>
-                <td><span class="text-success"><i class="ph-trend-up me-2"></i> 3.12%</span></td>
-                <td><h6 class="mb-0">$2,592</h6></td>
-                <td><span class="badge bg-danger bg-opacity-10 text-danger">Closed</span></td>
-                <td class="text-center">
-                  <button class="btn btn-sm btn-light"><i class="ph-list"></i></button>
-                </td>
-              </tr>
-
-              <tr class="table-light">
-                <td colspan="5">Yesterday</td>
-                <td class="text-end">
-                  <div class="progress" style="height:6px;">
-                    <div class="progress-bar bg-success" style="width:65%"></div>
-                  </div>
-                </td>
-              </tr>
-
-              <tr>
-                <td>
-                  <div class="d-flex align-items-center">
-                    <a href="#" class="d-block me-3">
-                      <img src="{{ asset('assets/images/brands/amazon.svg') }}" class="rounded-circle" width="36" height="36" alt="">
-                    </a>
-                    <div>
-                      <a href="#" class="text-body fw-semibold">Amazon ads</a>
-                      <div class="text-muted fs-sm">
-                        <span class="d-inline-block bg-danger rounded-pill p-1 me-1"></span>
-                        18:00 - 19:00
-                      </div>
-                    </div>
-                  </div>
-                </td>
-                <td><span class="text-muted">Blueish</span></td>
-                <td><span class="text-success"><i class="ph-trend-up me-2"></i> 6.79%</span></td>
-                <td><h6 class="mb-0">$1,540</h6></td>
-                <td><span class="badge bg-primary bg-opacity-10 text-primary">Active</span></td>
-                <td class="text-center">
-                  <button class="btn btn-sm btn-light"><i class="ph-list"></i></button>
-                </td>
-              </tr>
-
-            </tbody>
-          </table>
+    {{-- ====== KARTU STATUS & AKSI CEPAT FED ====== --}}
+    <div class="card">
+      <div class="card-header d-flex align-items-center">
+        <h5 class="mb-0">
+          Formulir Evaluasi Diri (AMI)
+          @if($academic)
+            <span class="text-muted fw-normal">— {{ $academic->name ?? ($academic->tahun ?? 'Tahun Akademik Aktif') }}</span>
+          @endif
+        </h5>
+        <div class="ms-auto">
+          @if($form)
+            @php
+              $statusName = $form->status->name ?? 'Draft';
+              $badgeClass = $statusName === 'Dikirim' ? 'bg-success' : 'bg-secondary';
+            @endphp
+            <span class="badge {{ $badgeClass }} rounded-pill">{{ $statusName }}</span>
+          @else
+            <span class="badge bg-warning text-dark rounded-pill">Belum Ada</span>
+          @endif
         </div>
       </div>
 
-      {{-- Support tickets (ringkas) --}}
-      <div class="card">
-        <div class="card-header d-sm-flex align-items-sm-center py-sm-0">
-          <h5 class="py-sm-2 my-sm-1">Support tickets</h5>
-          <div class="mt-2 mt-sm-0 ms-sm-auto">
-            <select class="form-select">
-              <option selected>Aug, 24 - Aug, 30</option>
-              <option>Aug, 17 - Aug, 23</option>
-              <option>Aug, 10 - Aug, 16</option>
-            </select>
+      <div class="card-body">
+        @if(!$academic)
+          <div class="alert alert-warning">
+            Tahun akademik aktif belum diset. Silakan hubungi admin.
           </div>
-        </div>
+        @else
+          {{-- Progress bar + angka --}}
+          @if($form)
+            <div class="d-flex align-items-center mb-3">
+              <div class="me-3">
+                <div class="fw-semibold">Progress Pengisian</div>
+                <div class="text-muted fs-sm">{{ $progress['terisi'] ?? 0 }} / {{ $progress['total'] ?? 0 }} butir ({{ $progress['percent'] ?? 0 }}%)</div>
+              </div>
+              <div class="flex-grow-1">
+                <div class="progress" style="height:10px;">
+                  <div class="progress-bar" style="width: {{ $progress['percent'] ?? 0 }}%"></div>
+                </div>
+              </div>
+            </div>
 
-        <div class="table-responsive">
-          <table class="table text-nowrap">
-            <thead>
-              <tr>
-                <th style="width: 60px">Due</th>
-                <th style="width: 280px;">User</th>
-                <th>Description</th>
-                <th class="text-center" style="width: 20px;">
-                  <i class="ph-dots-three"></i>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr class="table-light">
-                <td colspan="3">Active tickets</td>
-                <td class="text-end"><span class="badge bg-primary rounded-pill">24</span></td>
-              </tr>
+            {{-- Info submit / reminder --}}
+            @if(($form->status->name ?? '') === 'Dikirim')
+              <div class="alert alert-success py-2">
+                <i class="ph-check-circle me-2"></i>
+                Form telah <strong>dikirim</strong>
+                @if($form->tanggal_submit)
+                  pada {{ \Illuminate\Support\Carbon::parse($form->tanggal_submit)->translatedFormat('d M Y') }}
+                @endif
+                .
+              </div>
+            @else
+              <div class="alert alert-warning py-2">
+                <i class="ph-warning me-2"></i>
+                Harap lengkapi seluruh butir standar lalu tekan <strong>Submit</strong>.
+              </div>
+            @endif
+          @else
+            <div class="alert alert-info d-flex align-items-center">
+              <i class="ph-info me-2"></i>
+              Belum ada Form Evaluasi Diri untuk tahun/prodi ini. Silakan buka halaman FED untuk membuatnya.
+            </div>
+          @endif
 
-              <tr>
-                <td class="text-center">
-                  <h6 class="mb-0">12</h6>
-                  <div class="fs-sm text-muted lh-1">hours</div>
-                </td>
-                <td>
-                  <div class="d-flex align-items-center">
-                    <a href="#" class="d-inline-flex align-items-center justify-content-center bg-teal text-white lh-1 rounded-pill w-40px h-40px me-3">
-                      <span class="letter-icon"></span>
-                    </a>
-                    <div>
-                      <a href="#" class="text-body fw-semibold letter-icon-title">Annabelle Doney</a>
-                      <div class="d-flex align-items-center text-muted fs-sm">
-                        <span class="bg-danger rounded-pill p-1 me-2"></span> Blocker
-                      </div>
-                    </div>
-                  </div>
-                </td>
-                <td>
-                  <a href="#" class="text-body">
-                    <div class="fw-semibold">[#1183] Workaround for OS X selects printing bug</div>
-                    <span class="text-muted">Chrome fixed the bug several versions ago, thus rendering this...</span>
-                  </a>
-                </td>
-                <td class="text-center">
-                  <div class="dropdown">
-                    <a href="#" class="text-body" data-bs-toggle="dropdown"><i class="ph-list"></i></a>
-                    <div class="dropdown-menu dropdown-menu-end">
-                      <a href="#" class="dropdown-item"><i class="ph-arrow-bend-up-left me-2"></i> Quick reply</a>
-                      <a href="#" class="dropdown-item"><i class="ph-checks text-success me-2"></i> Resolve</a>
-                      <a href="#" class="dropdown-item"><i class="ph-x text-danger me-2"></i> Close</a>
-                    </div>
-                  </div>
-                </td>
-              </tr>
+          {{-- Tombol aksi cepat --}}
+          <div class="d-flex flex-wrap gap-2 mt-2">
+            <a href="{{ route('auditee.fed.index') }}" class="btn btn-primary">
+              <i class="ph-note-pencil me-2"></i> Buka Pengisian FED
+            </a>
 
-              <tr>
-                <td class="text-center">
-                  <h6 class="mb-0">16</h6>
-                  <div class="fs-sm text-muted lh-1">hours</div>
-                </td>
-                <td>
-                  <div class="d-flex align-items-center">
-                    <a href="#" class="d-inline-block me-3">
-                      <img src="{{ asset('assets/images/demo/users/face15.jpg') }}" class="rounded-circle" width="40" height="40" alt="">
-                    </a>
-                    <div>
-                      <a href="#" class="text-body fw-semibold">Chris Macintyre</a>
-                      <div class="d-flex align-items-center text-muted fs-sm">
-                        <span class="bg-primary rounded-pill p-1 me-2"></span> Medium
-                      </div>
-                    </div>
-                  </div>
-                </td>
-                <td>
-                  <a href="#" class="text-body">
-                    <div class="fw-semibold">[#1249] Vertically center carousel controls</div>
-                    <span class="text-muted">Try any carousel control and reduce the screen width below...</span>
-                  </a>
-                </td>
-                <td class="text-center">
-                  <button class="btn btn-sm btn-light"><i class="ph-list"></i></button>
-                </td>
-              </tr>
+            @if($form)
+              <form method="post" action="{{ route('auditee.fed.submit', $form) }}"
+                    onsubmit="return confirm('Kirim Form Evaluasi Diri sekarang? Setelah dikirim tidak dapat diedit.');">
+                @csrf
+                <button class="btn btn-success" @if(!$canSubmit) disabled @endif>
+                  <i class="ph-paper-plane-tilt me-2"></i> Submit
+                </button>
+              </form>
+            @endif
+          </div>
 
-              <tr class="table-light">
-                <td colspan="3">Resolved tickets</td>
-                <td class="text-end"><span class="badge bg-success rounded-pill">42</span></td>
-              </tr>
-
-              <tr>
-                <td class="text-center">
-                  <i class="ph-check text-success"></i>
-                </td>
-                <td>
-                  <div class="d-flex align-items-center">
-                    <a href="#" class="d-inline-flex align-items-center justify-content-center bg-success text-white lh-1 rounded-pill w-40px h-40px me-3">
-                      <span class="letter-icon"></span>
-                    </a>
-                    <div>
-                      <a href="#" class="text-body fw-semibold letter-icon-title">Alan Macedo</a>
-                      <div class="d-flex align-items-center text-muted fs-sm">
-                        <span class="bg-danger rounded-pill p-1 me-2"></span> Blocker
-                      </div>
-                    </div>
-                  </div>
-                </td>
-                <td>
-                  <a href="#" class="text-body">
-                    <div>[#1046] Avoid some unnecessary HTML string</div>
-                    <span class="text-muted">Rather than building a string of HTML and then parsing it...</span>
-                  </a>
-                </td>
-                <td class="text-center">
-                  <button class="btn btn-sm btn-light"><i class="ph-list"></i></button>
-                </td>
-              </tr>
-
-            </tbody>
-          </table>
-        </div>
+          {{-- Meta kecil --}}
+          @if($form && $lastUpdatedAt)
+            <div class="text-muted fs-sm mt-2">
+              Terakhir diperbarui: {{ \Illuminate\Support\Carbon::parse($lastUpdatedAt)->diffForHumans() }}
+            </div>
+          @endif
+        @endif
       </div>
-
     </div>
+    {{-- ====== END KARTU FED ====== --}}
 
-    <div class="col-xl-4">
-
-      {{-- Quick stats --}}
-      <div class="row g-3">
-        <div class="col-lg-12">
-          <div class="card bg-teal text-white">
-            <div class="card-body">
-              <div class="d-flex">
-                <h3 class="mb-0">3,450</h3>
-                <span class="badge bg-black bg-opacity-50 rounded-pill align-self-center ms-auto">+53.6%</span>
-              </div>
-              <div>Members online <div class="fs-sm opacity-75">489 avg</div></div>
-              <div class="progress mt-3" style="height:6px;">
-                <div class="progress-bar" style="width:72%"></div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="col-lg-12">
-          <div class="card bg-pink text-white">
-            <div class="card-body">
-              <div class="d-flex">
-                <h3 class="mb-0">49.4%</h3>
-                <a href="#" class="text-white ms-auto"><i class="ph-gear"></i></a>
-              </div>
-              <div>Current server load <div class="fs-sm opacity-75">34.6% avg</div></div>
-              <div class="progress mt-3" style="height:6px;">
-                <div class="progress-bar" style="width:49.4%"></div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="col-lg-12">
-          <div class="card bg-primary text-white">
-            <div class="card-body">
-              <div class="d-flex">
-                <h3 class="mb-0">$18,390</h3>
-                <a class="text-white ms-auto"><i class="ph-arrows-clockwise"></i></a>
-              </div>
-              <div>Today's revenue <div class="fs-sm opacity-75">$37,578 avg</div></div>
-              <div class="progress mt-3" style="height:6px;">
-                <div class="progress-bar" style="width:48%"></div>
-              </div>
-            </div>
-          </div>
-        </div>
+    {{-- ====== ITEM YANG BELUM DIISI ====== --}}
+    <div class="card">
+      <div class="card-header d-flex align-items-center">
+        <h5 class="mb-0">Butir Belum Diisi</h5>
+        @if($form)
+          <span class="badge bg-warning text-dark rounded-pill ms-auto">
+            {{ max(($progress['total'] ?? 0) - ($progress['terisi'] ?? 0), 0) }}
+          </span>
+        @endif
       </div>
-
-      {{-- Daily sales (ringkas) --}}
-      <div class="card mt-3">
-        <div class="card-header d-flex align-items-center">
-          <h5 class="mb-0">Daily sales stats</h5>
-          <div class="ms-auto fw-bold text-success">$4,378</div>
-        </div>
-
-        <div class="table-responsive">
-          <table class="table text-nowrap">
-            <thead>
-              <tr>
-                <th class="w-100">Application</th>
-                <th>Time</th>
-                <th>Price</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>
-                  <div class="d-flex align-items-center">
-                    <a href="#" class="d-inline-block me-3">
-                      <img src="{{ asset('assets/images/demo/logos/1.svg') }}" alt="" height="36">
-                    </a>
-                    <div>
-                      <a href="#" class="text-body fw-semibold letter-icon-title">Sigma application</a>
-                      <div class="text-muted fs-sm">New order</div>
+      <div class="table-responsive">
+        <table class="table align-middle">
+          <thead>
+            <tr>
+              <th style="width:60px">No</th>
+              <th>Standar & Butir</th>
+              <th class="text-end" style="width:120px">Aksi</th>
+            </tr>
+          </thead>
+          <tbody>
+            @if(!$form)
+              <tr><td colspan="3" class="text-muted text-center">Belum ada form. Buka halaman FED untuk membuat.</td></tr>
+            @else
+              @forelse($unfilled as $i => $d)
+                @php
+                  $stdName   = optional($d->AmiStandardIndicator?->standard)->name ?? '-';
+                  $descPlain = strip_tags($d->AmiStandardIndicator->description ?? '');
+                  $shortDesc = \Illuminate\Support\Str::limit($descPlain, 140);
+                @endphp
+                <tr id="unfilled-{{ $d->id }}">
+                  <td>{{ $i+1 }}</td>
+                  <td>
+                    <div class="fw-semibold text-primary">{{ $stdName }}</div>
+                    <div class="text-muted fs-sm">
+                      {{ $shortDesc }}
+                      @if(mb_strlen($descPlain) > 140)
+                        <a href="{{ route('auditee.fed.index') }}#detail-{{ $d->id }}" class="ms-1">Lihat selengkapnya</a>
+                      @endif
                     </div>
-                  </div>
-                </td>
-                <td><span class="text-muted">06:28 pm</span></td>
-                <td><strong>$49.90</strong></td>
-              </tr>
-
-              <tr>
-                <td>
-                  <div class="d-flex align-items-center">
-                    <a href="#" class="d-inline-block me-3">
-                      <img src="{{ asset('assets/images/demo/logos/2.svg') }}" alt="" height="36">
+                  </td>
+                  <td class="text-end">
+                    <a href="{{ route('auditee.fed.index') }}#detail-{{ $d->id }}" class="btn btn-sm btn-outline-primary">
+                      <i class="ph-pencil me-1"></i> Isi
                     </a>
-                    <div>
-                      <a href="#" class="text-body fw-semibold letter-icon-title">Alpha application</a>
-                      <div class="text-muted fs-sm">Renewal</div>
-                    </div>
-                  </div>
-                </td>
-                <td><span class="text-muted">04:52 pm</span></td>
-                <td><strong>$90.50</strong></td>
-              </tr>
-
-            </tbody>
-          </table>
-        </div>
+                  </td>
+                </tr>
+              @empty
+                <tr><td colspan="3" class="text-success text-center">Semua butir telah diisi</td></tr>
+              @endforelse
+            @endif
+          </tbody>
+        </table>
       </div>
-
     </div>
+    {{-- ====== END ITEM BELUM DIISI ====== --}}
+
+    {{-- ====== AKTIVITAS TERAKHIR ====== --}}
+    <div class="card">
+      <div class="card-header d-flex align-items-center">
+        <h5 class="mb-0">Aktivitas Terakhir</h5>
+      </div>
+      <div class="table-responsive">
+        <table class="table text-nowrap">
+          <thead>
+            <tr>
+              <th style="width:60px">#</th>
+              <th>Butir</th>
+              <th>Diubah oleh</th>
+              <th>Waktu</th>
+              <th class="text-end" style="width:120px">Aksi</th>
+            </tr>
+          </thead>
+          <tbody>
+            @if(!$form)
+              <tr><td colspan="5" class="text-muted text-center">Tidak ada aktivitas.</td></tr>
+            @else
+              @forelse($recent as $i => $d)
+                @php
+                  $stdName   = optional($d->AmiStandardIndicator?->standard)->name ?? '-';
+                  $descPlain = strip_tags($d->AmiStandardIndicator->description ?? '');
+                  $shortDesc = \Illuminate\Support\Str::limit($descPlain, 120);
+                  $k         = $d->KetercapaianStandard->name ?? '—';
+                  $hasil     = trim((string)($d->hasil ?? ''));
+                @endphp
+                <tr id="recent-{{ $d->id }}">
+                  <td>{{ $i+1 }}</td>
+                  <td>
+                    <div class="fw-semibold text-primary">{{ $stdName }}</div>
+                    <div class="text-muted fs-sm">
+                      {{ $shortDesc }}
+                      @if(mb_strlen($descPlain) > 120)
+                        <a href="{{ route('auditee.fed.index') }}#detail-{{ $d->id }}" class="ms-1">Lihat selengkapnya</a>
+                      @endif
+                    </div>
+                    <div class="text-muted fs-sm mt-1">
+                      Ketercapaian: <span class="fw-semibold">{{ $k }}</span>
+                      @if($hasil) · <span class="fst-italic">"{{ \Illuminate\Support\Str::limit($hasil, 60) }}"</span> @endif
+                    </div>
+                  </td>
+                  <td>{{ $d->updater_name ?? $d->updater_username ?? '—' }}</td>
+                  <td>{{ \Illuminate\Support\Carbon::parse($d->updated_at)->diffForHumans() }}</td>
+                  <td class="text-end">
+                    <a href="{{ route('auditee.fed.index') }}#detail-{{ $d->id }}" class="btn btn-sm btn-outline-secondary">
+                      <i class="ph-eye me-1"></i> Lihat
+                    </a>
+                  </td>
+                </tr>
+              @empty
+                <tr><td colspan="5" class="text-muted text-center">Belum ada aktivitas.</td></tr>
+              @endforelse
+            @endif
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {{-- ====== END AKTIVITAS TERAKHIR ====== --}}
+
   </div>
+
+  {{-- ====== KOLOM KANAN: STATISTIK & NAVIGASI ====== --}}
+  <div class="col-xl-4">
+
+    {{-- Statistik ringkas ketercapaian --}}
+    <div class="card">
+      <div class="card-header d-flex align-items-center">
+        <h5 class="mb-0">Statistik Ketercapaian</h5>
+      </div>
+      <div class="card-body">
+        @if(!$form)
+          <div class="text-muted">Belum ada data.</div>
+        @else
+          <ul class="list-unstyled mb-0">
+            <li class="d-flex justify-content-between align-items-center py-1">
+              <span>Melampaui</span>
+              <span class="badge bg-success bg-opacity-10 text-success">{{ $statsKetercapaian['Melampaui'] }}</span>
+            </li>
+            <li class="d-flex justify-content-between align-items-center py-1">
+              <span>Mencapai</span>
+              <span class="badge bg-primary bg-opacity-10 text-primary">{{ $statsKetercapaian['Mencapai'] }}</span>
+            </li>
+            <li class="d-flex justify-content-between align-items-center py-1">
+              <span>Tidak Mencapai</span>
+              <span class="badge bg-warning text-dark">{{ $statsKetercapaian['Tidak Mencapai'] }}</span>
+            </li>
+            <li class="d-flex justify-content-between align-items-center py-1">
+              <span>Menyimpang</span>
+              <span class="badge bg-danger bg-opacity-10 text-danger">{{ $statsKetercapaian['Menyimpang'] }}</span>
+            </li>
+            <li class="d-flex justify-content-between align-items-center py-1">
+              <span>Kosong</span>
+              <span class="badge bg-secondary">{{ $statsKetercapaian['Kosong'] }}</span>
+            </li>
+          </ul>
+        @endif
+      </div>
+    </div>
+
+    {{-- Navigasi cepat --}}
+    <div class="card">
+      <div class="card-header d-flex align-items-center">
+        <h5 class="mb-0">Navigasi Cepat</h5>
+      </div>
+      <div class="list-group list-group-borderless">
+        <a href="{{ route('auditee.fed.index') }}" class="list-group-item list-group-item-action d-flex align-items-center">
+          <i class="ph-note-pencil me-2"></i> Pengisian FED
+          <span class="ms-auto text-muted">&rarr;</span>
+        </a>
+        {{-- Tambah link lain jika ada modul lain --}}
+        <a href="#" class="list-group-item list-group-item-action d-flex align-items-center disabled">
+          <i class="ph-file-pdf me-2"></i> Cetak Laporan (segera)
+        </a>
+        <a href="#" class="list-group-item list-group-item-action d-flex align-items-center disabled">
+          <i class="ph-book-open me-2"></i> Panduan FED (segera)
+        </a>
+      </div>
+    </div>
+
+  </div>
+</div>
 @endsection
 
 @push('styles')
-{{-- Tambahan styling kecil jika perlu --}}
 <style>
   .letter-icon { width: 18px; height: 18px; display:block; }
 </style>
 @endpush
 
 @push('scripts')
-{{-- Tempatkan script khusus halaman di sini. Hindari load demo charts global. --}}
-{{-- Contoh: jika nanti pakai ECharts / D3, include hanya di halaman ini. --}}
+{{-- Script khusus halaman jika diperlukan --}}
 @endpush

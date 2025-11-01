@@ -9,6 +9,8 @@ use App\Http\Controllers\Admin\UserRoleController;
 use App\Http\Controllers\Admin\AmiIndicatorController;
 use App\Http\Controllers\Admin\AmiStandardController;
 use App\Http\Controllers\Admin\IndicatorPicController;
+use App\Http\Controllers\Auditee\DashboardController;
+use App\Http\Controllers\Auditee\EvaluasiDiriController;
 use App\Http\Controllers\UnifiedAuthController;
 use Illuminate\Support\Facades\Route;
 
@@ -20,10 +22,16 @@ Route::get('/login', [UnifiedAuthController::class, 'show'])->name('login');
 Route::post('/login', [UnifiedAuthController::class, 'login'])->name('login.do');
 Route::post('/logout', [UnifiedAuthController::class, 'logout'])->name('logout');
 
-Route::prefix('auditee')->name('auditee.')->middleware(['auth', 'role:Auditee'])->group(function () {
-    Route::get('/dashboard', fn() => view('auditee.dashboard'))->name('dashboard');
+Route::prefix('auditee')->name('auditee.')->middleware(['auth', 'role:Ketua Program Studi|Dekan|Ketua PPKHA'])->group(function () {
+    Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
-    // Tambahkan route user lain di sini kalau ada
+    // Halaman khusus FED (index menampilkan header + detail)
+    Route::get('/fed', [EvaluasiDiriController::class, 'index'])->name('fed.index');
+        Route::post('/fed', [EvaluasiDiriController::class, 'store'])->name('fed.store'); // buat header+detail
+        Route::put('/fed/{form}', [EvaluasiDiriController::class, 'updateHeader'])->name('fed.updateHeader');
+        Route::put('/fed/{form}/detail/{detail}', [EvaluasiDiriController::class, 'updateDetail'])->name('fed.updateDetail');
+        Route::post('/fed/{form}/submit', [EvaluasiDiriController::class, 'submit'])->name('fed.submit');
+        Route::get('/fed/{form}/export', [EvaluasiDiriController::class, 'exportDoc'])->name('fed.export');
 });
 
 // ==== AREA ADMIN ====

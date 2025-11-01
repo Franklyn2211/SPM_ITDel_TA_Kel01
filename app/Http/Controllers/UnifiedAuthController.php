@@ -130,33 +130,35 @@ class UnifiedAuthController extends Controller
         return redirect()->route('login')->with('status', 'Logout berhasil.');
     }
 
-    /**
-     * Tentukan halaman landing setelah login:
-     * - adminspm => admin.dashboard
-     * - jika punya role aktif bernama "Auditee" => auditee.dashboard
-     * - jika belum punya role aktif => kembali ke login dengan pesan
-     */
-    protected function redirectBasedOnRole(User $user)
-    {
-        if ($user->username === 'adminspm') {
-            return redirect()->route('admin.dashboard');
-        }
-
-        // cek role aktif berdasarkan NAMA role (bukan ID)
-        $hasAuditee = $user->roles()
-            ->where('active', true)
-            ->whereHas('role', fn($q) => $q->where('name', 'Auditee'))
-            ->exists();
-
-        if ($hasAuditee) {
-            return redirect()->route('auditee.dashboard');
-        }
-
-        // kalau belum di-assign role aktif, jangan dibiarkan keluyuran
-        Auth::logout();
-        session()->forget(['cis_token','cis_profile']);
-        return redirect()
-            ->route('login')
-            ->withErrors('Akun belum memiliki role aktif. Hubungi admin.');
+protected function redirectBasedOnRole(User $user)
+{
+    if ($user->username === 'adminspm') {
+        return redirect()->route('admin.dashboard');
     }
+
+    // daftar role yang termasuk auditee
+    $auditeeRoles = ['Dekan', 'Ketua Program Studi', 'Ketua PPKHA']; // tambah sesuai kebutuhan
+
+    // VERSI SPATIE (paling simpel)
+    if (method_exists($user, 'hasAnyRole') && $user->hasAnyRole($auditeeRoles)) {
+        return redirect()->route('auditee.dashboard');
+    }
+
+    // VERSI CUSTOM RELATION (kalau kamu memang pakai pivot active)
+    $punyaAuditeeAktif = $user->roles()
+        ->where('active', true)
+        ->whereHas('role', fn($q) => $q->whereIn('name', $auditeeRoles))
+        ->exists();
+
+    if ($punyaAuditeeAktif) {
+        return redirect()->route('auditee.dashboard');
+    }
+
+    Auth::logout();
+    session()->forget(['cis_token','cis_profile']);
+    return redirect()
+        ->route('login')
+        ->withErrors('Akun belum memiliki role aktif. Hubungi admin.');
+}
+
 }

@@ -10,8 +10,13 @@ class AmiStandardController extends Controller
 {
     public function index()
     {
-        $rows = AmiStandard::with(['academicConfig:id,academic_code,active'])
-        ->withCount('indicators')
+        $rows = AmiStandard::query()
+            ->with(['academicConfig:id,academic_code,active'])
+            ->where('ami_standards.active', 1)
+            ->whereHas('academicConfig', fn($q) => $q->where('active', 1))
+            ->withCount(['indicators as indicators_count' => function ($q) {
+                $q->where('active', 1);
+            }])
             ->orderBy('id')
             ->paginate(20);
 
@@ -25,12 +30,13 @@ class AmiStandardController extends Controller
         ]);
 
         $amiStandard = new AmiStandard([
-            'id' => AmiStandard::generateNextId(),
+            'id'   => AmiStandard::generateNextId(),
             'name' => $request->get('name'),
+            'active' => true,
         ]);
 
         $amiStandard->save();
-        return redirect()->route('admin.ami.standard')->with('success', 'AMI Standard created successfully.');
+        return redirect()->route('admin.ami.standard')->with('success', 'Standar AMI berhasil dibuat.');
     }
 
     public function update(Request $request, AmiStandard $amiStandard)
@@ -39,19 +45,17 @@ class AmiStandardController extends Controller
             'name' => 'required|string|max:255',
         ]);
 
-        $data = [
-            'name' => $request->get('name')
-        ];
+        $amiStandard->update([
+            'name' => $request->get('name'),
+        ]);
 
-        $amiStandard->update($data);
-
-        return redirect()->route('admin.ami.standard')->with('success', 'AMI Standard updated successfully.');
+        return redirect()->route('admin.ami.standard')->with('success', 'Standar AMI berhasil diperbarui.');
     }
 
     public function destroy($id)
     {
         $amiStandard = AmiStandard::findOrFail($id);
         $amiStandard->delete();
-        return redirect()->route('admin.ami.standard')->with('success', 'AMI Standard deleted successfully.');
+        return redirect()->route('admin.ami.standard')->with('success', 'Standar AMI berhasil dihapus.');
     }
 }

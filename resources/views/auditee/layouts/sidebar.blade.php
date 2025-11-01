@@ -32,7 +32,7 @@
         </li>
 
         <li class="nav-item">
-          <a href="{{ url('/') }}" class="nav-link {{ request()->is('/') ? 'active' : '' }}">
+          <a href="{{ route('auditee.dashboard') }}" class="nav-link {{ request()->is('/') ? 'active' : '' }}">
             <i class="ph-house"></i>
             <span>Dashboard</span>
           </a>
@@ -46,13 +46,13 @@
           </a>
           <ul class="nav-group-sub collapse">
             <li class="nav-item">
-              <a href="{{ route('auditee.ami.standard') }}" class="nav-link">Standar AMI</a>
+              <a href="#" class="nav-link">Standar AMI</a>
             </li>
             <li class="nav-item">
-              <a href="{{ route('auditee.ami.indicator') }}" class="nav-link">Indikator Kinerja</a>
+              <a href="#" class="nav-link">Indikator Kinerja</a>
             </li>
             <li class="nav-item">
-              <a href="{{ route('auditee.ami.pic') }}" class="nav-link">Assign PIC Indikator</a>
+              <a href="#" class="nav-link">Assign PIC Indikator</a>
             </li>
           </ul>
         </li>
