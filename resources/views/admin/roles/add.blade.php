@@ -36,6 +36,23 @@
 
 @section('content')
 <div class="content pt-0">
+  {{-- ALERTS --}}
+  @if ($errors->any())
+    <div class="alert alert-danger border-0 alert-dismissible fade show">
+      <div class="d-flex">
+        <i class="ph-x-circle me-2"></i>
+        <div>
+          <strong>Gagal menyimpan.</strong>
+          <ul class="mb-0 mt-1">
+            @foreach ($errors->all() as $err)
+              <li>{{ $err }}</li>
+            @endforeach
+          </ul>
+        </div>
+      </div>
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+  @endif
   @if (session('success'))
     <div class="alert alert-success border-0 alert-dismissible fade show">
       <div class="d-flex align-items-center">
@@ -179,6 +196,7 @@
 </div>
 
 @push('scripts')
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script>
   // Pencarian
   document.getElementById('searchRole').addEventListener('keyup', function() {
@@ -213,14 +231,23 @@
 
   // Hapus
   function confirmDelete(url) {
-    if (confirm('Hapus role ini?')) {
-      const f = document.createElement('form');
-      f.method = 'POST';
-      f.action = url;
-      f.innerHTML = `@csrf @method('DELETE')`;
-      document.body.appendChild(f);
-      f.submit();
-    }
+    Swal.fire({
+      title: 'Hapus data?',
+      text: 'Data yang dihapus tidak bisa dikembalikan.',
+      icon: undefined,
+      showCancelButton: true,
+      confirmButtonText: 'Ya',
+      cancelButtonText: 'Batal',
+      customClass: { confirmButton: 'btn btn-primary', cancelButton: 'btn btn-light' },
+      buttonsStyling: false
+    }).then((r) => {
+      if (r.isConfirmed) {
+        const f = document.createElement('form');
+        f.method = 'POST'; f.action = url;
+        f.innerHTML = `@csrf @method('DELETE')`;
+        document.body.appendChild(f); f.submit();
+      }
+    });
   }
 </script>
 @endpush

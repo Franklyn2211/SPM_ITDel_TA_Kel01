@@ -2,7 +2,6 @@
 
 @section('title', 'Dashboard - Admin Sistem Penjaminan Mutu')
 
-{{-- Page Header (di-render di dalam content-wrapper) --}}
 @section('page-header')
 <div class="page-header page-header-light shadow">
   <div class="page-header-content d-lg-flex">
@@ -17,21 +16,12 @@
 
     <div class="collapse d-lg-block my-lg-auto ms-lg-auto" id="page_header">
       <div class="d-lg-flex align-items-center">
-        <a href="#" class="d-flex align-items-center text-body py-2 me-lg-3">
+        <a href="{{ route('admin.academic_config.index') }}" class="d-flex align-items-center text-body py-2 me-lg-3">
+          <i class="ph-gear me-2"></i> Konfigurasi
+        </a>
+        <a href="#" class="d-flex align-items-center text-body py-2">
           <i class="ph-lifebuoy me-2"></i> Support
         </a>
-
-        <div class="dropdown">
-          <a href="#" class="d-flex align-items-center text-body dropdown-toggle py-2" data-bs-toggle="dropdown">
-            <i class="ph-gear me-2"></i> <span>Settings</span>
-          </a>
-          <div class="dropdown-menu dropdown-menu-end">
-            <a href="#" class="dropdown-item"><i class="ph-shield-warning me-2"></i> Account security</a>
-            <a href="#" class="dropdown-item"><i class="ph-lock-key me-2"></i> Privacy</a>
-            <div class="dropdown-divider"></div>
-            <a href="#" class="dropdown-item"><i class="ph-gear me-2"></i> All settings</a>
-          </div>
-        </div>
       </div>
     </div>
   </div>
@@ -39,9 +29,15 @@
   <div class="page-header-content border-top">
     <div class="d-flex align-items-center">
       <div class="breadcrumb py-2">
-        <a href="{{ url('/') }}" class="breadcrumb-item"><i class="ph-house"></i></a>
-        <a href="#" class="breadcrumb-item">Home</a>
+        <a href="{{ route('admin.dashboard') }}" class="breadcrumb-item"><i class="ph-house"></i></a>
         <span class="breadcrumb-item active">Dashboard</span>
+      </div>
+      <div class="ms-auto">
+        @if($activeAc)
+          <span class="badge bg-primary">TA Aktif: {{ $activeAc->academic_code ?? $activeAc->name ?? '-' }}</span>
+        @else
+          <span class="badge bg-warning text-dark">TA aktif belum dipilih</span>
+        @endif
       </div>
     </div>
   </div>
@@ -49,381 +45,266 @@
 @endsection
 
 @section('content')
-  {{-- MAIN ROW --}}
-  <div class="row">
-    <div class="col-xl-8">
+<div class="row">
+  {{-- KOLOM KIRI --}}
+  <div class="col-xl-8">
 
-      {{-- Marketing summary (ringkas) --}}
-      <div class="card">
-        <div class="card-header d-flex align-items-center">
-          <h5 class="mb-0">Marketing campaigns</h5>
-          <div class="ms-auto">
-            <span class="badge bg-success rounded-pill">28 active</span>
+    {{-- Ringkasan cepat --}}
+    <div class="row g-3">
+      <div class="col-sm-3">
+        <div class="card border-0 shadow-sm">
+          <div class="card-body">
+            <div class="text-muted fs-sm">Standar (TA aktif)</div>
+            <div class="d-flex align-items-center">
+              <h3 class="mb-0">{{ $counts['standards'] ?? 0 }}</h3>
+              <a class="ms-auto btn btn-sm btn-light" href="{{ route('admin.ami.standard') }}"><i class="ph-list"></i></a>
+            </div>
           </div>
         </div>
-
-        <div class="table-responsive">
-          <table class="table text-nowrap">
-            <thead>
-              <tr>
-                <th>Campaign</th>
-                <th>Client</th>
-                <th>Changes</th>
-                <th>Budget</th>
-                <th>Status</th>
-                <th class="text-center" style="width: 20px;">
-                  <i class="ph-dots-three"></i>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr class="table-light">
-                <td colspan="5">Today</td>
-                <td class="text-end">
-                  <div class="progress" style="height:6px;">
-                    <div class="progress-bar bg-primary" style="width:30%"></div>
-                  </div>
-                </td>
-              </tr>
-
-              <tr>
-                <td>
-                  <div class="d-flex align-items-center">
-                    <a href="#" class="d-block me-3">
-                      <img src="{{ asset('assets/images/brands/facebook.svg') }}" class="rounded-circle" width="36" height="36" alt="">
-                    </a>
-                    <div>
-                      <a href="#" class="text-body fw-semibold">Facebook</a>
-                      <div class="text-muted fs-sm">
-                        <span class="d-inline-block bg-primary rounded-pill p-1 me-1"></span>
-                        02:00 - 03:00
-                      </div>
-                    </div>
-                  </div>
-                </td>
-                <td><span class="text-muted">Mintlime</span></td>
-                <td><span class="text-success"><i class="ph-trend-up me-2"></i> 2.43%</span></td>
-                <td><h6 class="mb-0">$5,489</h6></td>
-                <td><span class="badge bg-primary bg-opacity-10 text-primary">Active</span></td>
-                <td class="text-center">
-                  <button class="btn btn-sm btn-light"><i class="ph-list"></i></button>
-                </td>
-              </tr>
-
-              <tr>
-                <td>
-                  <div class="d-flex align-items-center">
-                    <a href="#" class="d-block me-3">
-                      <img src="{{ asset('assets/images/brands/youtube.svg') }}" class="rounded-circle" width="36" height="36" alt="">
-                    </a>
-                    <div>
-                      <a href="#" class="text-body fw-semibold">YouTube</a>
-                      <div class="text-muted fs-sm">
-                        <span class="d-inline-block bg-danger rounded-pill p-1 me-1"></span>
-                        13:00 - 14:00
-                      </div>
-                    </div>
-                  </div>
-                </td>
-                <td><span class="text-muted">CDsoft</span></td>
-                <td><span class="text-success"><i class="ph-trend-up me-2"></i> 3.12%</span></td>
-                <td><h6 class="mb-0">$2,592</h6></td>
-                <td><span class="badge bg-danger bg-opacity-10 text-danger">Closed</span></td>
-                <td class="text-center">
-                  <button class="btn btn-sm btn-light"><i class="ph-list"></i></button>
-                </td>
-              </tr>
-
-              <tr class="table-light">
-                <td colspan="5">Yesterday</td>
-                <td class="text-end">
-                  <div class="progress" style="height:6px;">
-                    <div class="progress-bar bg-success" style="width:65%"></div>
-                  </div>
-                </td>
-              </tr>
-
-              <tr>
-                <td>
-                  <div class="d-flex align-items-center">
-                    <a href="#" class="d-block me-3">
-                      <img src="{{ asset('assets/images/brands/amazon.svg') }}" class="rounded-circle" width="36" height="36" alt="">
-                    </a>
-                    <div>
-                      <a href="#" class="text-body fw-semibold">Amazon ads</a>
-                      <div class="text-muted fs-sm">
-                        <span class="d-inline-block bg-danger rounded-pill p-1 me-1"></span>
-                        18:00 - 19:00
-                      </div>
-                    </div>
-                  </div>
-                </td>
-                <td><span class="text-muted">Blueish</span></td>
-                <td><span class="text-success"><i class="ph-trend-up me-2"></i> 6.79%</span></td>
-                <td><h6 class="mb-0">$1,540</h6></td>
-                <td><span class="badge bg-primary bg-opacity-10 text-primary">Active</span></td>
-                <td class="text-center">
-                  <button class="btn btn-sm btn-light"><i class="ph-list"></i></button>
-                </td>
-              </tr>
-
-            </tbody>
-          </table>
-        </div>
       </div>
-
-      {{-- Support tickets (ringkas) --}}
-      <div class="card">
-        <div class="card-header d-sm-flex align-items-sm-center py-sm-0">
-          <h5 class="py-sm-2 my-sm-1">Support tickets</h5>
-          <div class="mt-2 mt-sm-0 ms-sm-auto">
-            <select class="form-select">
-              <option selected>Aug, 24 - Aug, 30</option>
-              <option>Aug, 17 - Aug, 23</option>
-              <option>Aug, 10 - Aug, 16</option>
-            </select>
+      <div class="col-sm-3">
+        <div class="card border-0 shadow-sm">
+          <div class="card-body">
+            <div class="text-muted fs-sm">Indikator (TA aktif)</div>
+            <div class="d-flex align-items-center">
+              <h3 class="mb-0">{{ $counts['indicators'] ?? 0 }}</h3>
+              <a class="ms-auto btn btn-sm btn-light" href="{{ route('admin.ami.indicator') }}"><i class="ph-list"></i></a>
+            </div>
           </div>
         </div>
-
-        <div class="table-responsive">
-          <table class="table text-nowrap">
-            <thead>
-              <tr>
-                <th style="width: 60px">Due</th>
-                <th style="width: 280px;">User</th>
-                <th>Description</th>
-                <th class="text-center" style="width: 20px;">
-                  <i class="ph-dots-three"></i>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr class="table-light">
-                <td colspan="3">Active tickets</td>
-                <td class="text-end"><span class="badge bg-primary rounded-pill">24</span></td>
-              </tr>
-
-              <tr>
-                <td class="text-center">
-                  <h6 class="mb-0">12</h6>
-                  <div class="fs-sm text-muted lh-1">hours</div>
-                </td>
-                <td>
-                  <div class="d-flex align-items-center">
-                    <a href="#" class="d-inline-flex align-items-center justify-content-center bg-teal text-white lh-1 rounded-pill w-40px h-40px me-3">
-                      <span class="letter-icon"></span>
-                    </a>
-                    <div>
-                      <a href="#" class="text-body fw-semibold letter-icon-title">Annabelle Doney</a>
-                      <div class="d-flex align-items-center text-muted fs-sm">
-                        <span class="bg-danger rounded-pill p-1 me-2"></span> Blocker
-                      </div>
-                    </div>
-                  </div>
-                </td>
-                <td>
-                  <a href="#" class="text-body">
-                    <div class="fw-semibold">[#1183] Workaround for OS X selects printing bug</div>
-                    <span class="text-muted">Chrome fixed the bug several versions ago, thus rendering this...</span>
-                  </a>
-                </td>
-                <td class="text-center">
-                  <div class="dropdown">
-                    <a href="#" class="text-body" data-bs-toggle="dropdown"><i class="ph-list"></i></a>
-                    <div class="dropdown-menu dropdown-menu-end">
-                      <a href="#" class="dropdown-item"><i class="ph-arrow-bend-up-left me-2"></i> Quick reply</a>
-                      <a href="#" class="dropdown-item"><i class="ph-checks text-success me-2"></i> Resolve</a>
-                      <a href="#" class="dropdown-item"><i class="ph-x text-danger me-2"></i> Close</a>
-                    </div>
-                  </div>
-                </td>
-              </tr>
-
-              <tr>
-                <td class="text-center">
-                  <h6 class="mb-0">16</h6>
-                  <div class="fs-sm text-muted lh-1">hours</div>
-                </td>
-                <td>
-                  <div class="d-flex align-items-center">
-                    <a href="#" class="d-inline-block me-3">
-                      <img src="{{ asset('assets/images/demo/users/face15.jpg') }}" class="rounded-circle" width="40" height="40" alt="">
-                    </a>
-                    <div>
-                      <a href="#" class="text-body fw-semibold">Chris Macintyre</a>
-                      <div class="d-flex align-items-center text-muted fs-sm">
-                        <span class="bg-primary rounded-pill p-1 me-2"></span> Medium
-                      </div>
-                    </div>
-                  </div>
-                </td>
-                <td>
-                  <a href="#" class="text-body">
-                    <div class="fw-semibold">[#1249] Vertically center carousel controls</div>
-                    <span class="text-muted">Try any carousel control and reduce the screen width below...</span>
-                  </a>
-                </td>
-                <td class="text-center">
-                  <button class="btn btn-sm btn-light"><i class="ph-list"></i></button>
-                </td>
-              </tr>
-
-              <tr class="table-light">
-                <td colspan="3">Resolved tickets</td>
-                <td class="text-end"><span class="badge bg-success rounded-pill">42</span></td>
-              </tr>
-
-              <tr>
-                <td class="text-center">
-                  <i class="ph-check text-success"></i>
-                </td>
-                <td>
-                  <div class="d-flex align-items-center">
-                    <a href="#" class="d-inline-flex align-items-center justify-content-center bg-success text-white lh-1 rounded-pill w-40px h-40px me-3">
-                      <span class="letter-icon"></span>
-                    </a>
-                    <div>
-                      <a href="#" class="text-body fw-semibold letter-icon-title">Alan Macedo</a>
-                      <div class="d-flex align-items-center text-muted fs-sm">
-                        <span class="bg-danger rounded-pill p-1 me-2"></span> Blocker
-                      </div>
-                    </div>
-                  </div>
-                </td>
-                <td>
-                  <a href="#" class="text-body">
-                    <div>[#1046] Avoid some unnecessary HTML string</div>
-                    <span class="text-muted">Rather than building a string of HTML and then parsing it...</span>
-                  </a>
-                </td>
-                <td class="text-center">
-                  <button class="btn btn-sm btn-light"><i class="ph-list"></i></button>
-                </td>
-              </tr>
-
-            </tbody>
-          </table>
+      </div>
+      <div class="col-sm-3">
+        <div class="card border-0 shadow-sm">
+          <div class="card-body">
+            <div class="text-muted fs-sm">PIC Assignment</div>
+            <div class="d-flex align-items-center">
+              <h3 class="mb-0">{{ $counts['pics'] ?? 0 }}</h3>
+              <a class="ms-auto btn btn-sm btn-light" href="{{ route('admin.ami.indicator') }}"><i class="ph-users-three"></i></a>
+            </div>
+          </div>
         </div>
       </div>
-
+      <div class="col-sm-3">
+        <div class="card border-0 shadow-sm">
+          <div class="card-body">
+            <div class="text-muted fs-sm">Role aktif</div>
+            <div class="d-flex align-items-center">
+              <h3 class="mb-0">{{ $counts['roles'] ?? 0 }}</h3>
+              <a class="ms-auto btn btn-sm btn-light" href="{{ route('admin.roles.index') }}"><i class="ph-gear"></i></a>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
-    <div class="col-xl-4">
-
-      {{-- Quick stats --}}
-      <div class="row g-3">
-        <div class="col-lg-12">
-          <div class="card bg-teal text-white">
-            <div class="card-body">
-              <div class="d-flex">
-                <h3 class="mb-0">3,450</h3>
-                <span class="badge bg-black bg-opacity-50 rounded-pill align-self-center ms-auto">+53.6%</span>
-              </div>
-              <div>Members online <div class="fs-sm opacity-75">489 avg</div></div>
-              <div class="progress mt-3" style="height:6px;">
-                <div class="progress-bar" style="width:72%"></div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="col-lg-12">
-          <div class="card bg-pink text-white">
-            <div class="card-body">
-              <div class="d-flex">
-                <h3 class="mb-0">49.4%</h3>
-                <a href="#" class="text-white ms-auto"><i class="ph-gear"></i></a>
-              </div>
-              <div>Current server load <div class="fs-sm opacity-75">34.6% avg</div></div>
-              <div class="progress mt-3" style="height:6px;">
-                <div class="progress-bar" style="width:49.4%"></div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="col-lg-12">
-          <div class="card bg-primary text-white">
-            <div class="card-body">
-              <div class="d-flex">
-                <h3 class="mb-0">$18,390</h3>
-                <a class="text-white ms-auto"><i class="ph-arrows-clockwise"></i></a>
-              </div>
-              <div>Today's revenue <div class="fs-sm opacity-75">$37,578 avg</div></div>
-              <div class="progress mt-3" style="height:6px;">
-                <div class="progress-bar" style="width:48%"></div>
-              </div>
-            </div>
-          </div>
+    {{-- Form Dikirim (Menunggu Audit) --}}
+    <div class="card mt-3">
+      <div class="card-header d-flex align-items-center">
+        <h5 class="mb-0">Form Evaluasi Diri — Dikirim (Menunggu Audit)</h5>
+        <span class="badge bg-success ms-2">{{ $queueSubmitted->count() }}</span>
+        <div class="ms-auto">
+          <a href="{{ route('admin.ami.standard') }}" class="btn btn-sm btn-light">Kelola Standar</a>
         </div>
       </div>
-
-      {{-- Daily sales (ringkas) --}}
-      <div class="card mt-3">
-        <div class="card-header d-flex align-items-center">
-          <h5 class="mb-0">Daily sales stats</h5>
-          <div class="ms-auto fw-bold text-success">$4,378</div>
-        </div>
-
-        <div class="table-responsive">
-          <table class="table text-nowrap">
-            <thead>
+      <div class="table-responsive">
+        <table class="table align-middle text-nowrap">
+          <thead>
+            <tr>
+              <th>Unit/Prodi</th>
+              <th class="text-center" style="width:160px;">Progress</th>
+              <th style="width:160px;">Tanggal Kirim</th>
+              <th class="text-end" style="width:120px;">Aksi</th>
+            </tr>
+          </thead>
+          <tbody>
+            @forelse($queueSubmitted as $f)
+              @php $p = $filledByForm[$f->id] ?? ['total'=>0,'terisi'=>0,'percent'=>0]; @endphp
               <tr>
-                <th class="w-100">Application</th>
-                <th>Time</th>
-                <th>Price</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>
-                  <div class="d-flex align-items-center">
-                    <a href="#" class="d-inline-block me-3">
-                      <img src="{{ asset('assets/images/demo/logos/1.svg') }}" alt="" height="36">
-                    </a>
-                    <div>
-                      <a href="#" class="text-body fw-semibold letter-icon-title">Sigma application</a>
-                      <div class="text-muted fs-sm">New order</div>
-                    </div>
+                <td>{{ optional($f->categoryDetail)->name ?? '-' }}</td>
+                <td class="text-center">
+                  <div class="small text-muted mb-1">{{ $p['terisi'] }}/{{ $p['total'] }} ({{ $p['percent'] }}%)</div>
+                  <div class="progress" style="height:8px;">
+                    <div class="progress-bar" style="width: {{ $p['percent'] }}%"></div>
                   </div>
                 </td>
-                <td><span class="text-muted">06:28 pm</span></td>
-                <td><strong>$49.90</strong></td>
-              </tr>
-
-              <tr>
                 <td>
-                  <div class="d-flex align-items-center">
-                    <a href="#" class="d-inline-block me-3">
-                      <img src="{{ asset('assets/images/demo/logos/2.svg') }}" alt="" height="36">
-                    </a>
-                    <div>
-                      <a href="#" class="text-body fw-semibold letter-icon-title">Alpha application</a>
-                      <div class="text-muted fs-sm">Renewal</div>
-                    </div>
-                  </div>
+                  {{-- tanggal_submit kamu simpan varchar; tetap aman diparse kalau formatnya tanggal --}}
+                  {{ $f->tanggal_submit ? \Illuminate\Support\Carbon::parse($f->tanggal_submit)->translatedFormat('d M Y') : '—' }}
                 </td>
-                <td><span class="text-muted">04:52 pm</span></td>
-                <td><strong>$90.50</strong></td>
+                <td class="text-end">
+                  <a href="#" class="btn btn-sm btn-primary" disabled><i class="ph-clipboard-text me-1"></i> Audit</a>
+                </td>
               </tr>
-
-            </tbody>
-          </table>
-        </div>
+            @empty
+              <tr><td colspan="4" class="text-center text-muted">Belum ada form yang dikirim pada TA aktif.</td></tr>
+            @endforelse
+          </tbody>
+        </table>
       </div>
-
     </div>
+
+    {{-- Aktivitas Terbaru --}}
+    <div class="card mt-3">
+      <div class="card-header">
+        <h5 class="mb-0">Aktivitas Terbaru</h5>
+      </div>
+      <div class="table-responsive">
+        <table class="table text-nowrap align-middle">
+          <thead>
+            <tr>
+              <th style="width:60px;">#</th>
+              <th>Ringkasan</th>
+              <th>Diubah oleh</th>
+              <th>Waktu</th>
+            </tr>
+          </thead>
+          <tbody>
+            @forelse($recent as $i => $d)
+              @php
+                $ind = $indicatorMap[$d->ami_standard_indicator_id] ?? null;
+                $stdName = $ind?->standard?->name;
+                $desc = \Illuminate\Support\Str::limit(strip_tags($ind->description ?? ''), 60);
+                $butirLabel = trim(($stdName ? $stdName.' — ' : '').$desc);
+              @endphp
+              <tr>
+                <td>{{ $i+1 }}</td>
+                <td>
+                  <div class="text-muted fs-sm">
+                    Butir {{ $butirLabel !== '' ? $butirLabel : '-' }}
+                    @if($d->hasil)
+                      — <span class="fst-italic">"{{ \Illuminate\Support\Str::limit($d->hasil, 80) }}"</span>
+                    @endif
+                  </div>
+                </td>
+                <td>{{ $d->updater_name ?? $d->updater_username ?? '—' }}</td>
+                <td>{{ \Illuminate\Support\Carbon::parse($d->updated_at)->diffForHumans() }}</td>
+              </tr>
+            @empty
+              <tr><td colspan="4" class="text-center text-muted">Belum ada aktivitas.</td></tr>
+            @endforelse
+          </tbody>
+        </table>
+      </div>
+    </div>
+
   </div>
+
+  {{-- KOLOM KANAN --}}
+  <div class="col-xl-4">
+
+    {{-- Statistik Ketercapaian --}}
+    <div class="card">
+      <div class="card-header d-flex align-items-center">
+        <h5 class="mb-0">Statistik Ketercapaian (TA aktif)</h5>
+      </div>
+      <div class="card-body">
+        <ul class="list-unstyled mb-0">
+          <li class="d-flex justify-content-between py-1">
+            <span>Melampaui</span><span class="badge bg-success bg-opacity-10 text-success">{{ $statsK['Melampaui'] }}</span>
+          </li>
+          <li class="d-flex justify-content-between py-1">
+            <span>Mencapai</span><span class="badge bg-primary bg-opacity-10 text-primary">{{ $statsK['Mencapai'] }}</span>
+          </li>
+          <li class="d-flex justify-content-between py-1">
+            <span>Tidak Mencapai</span><span class="badge bg-warning text-dark">{{ $statsK['Tidak Mencapai'] }}</span>
+          </li>
+          <li class="d-flex justify-content-between py-1">
+            <span>Menyimpang</span><span class="badge bg-danger bg-opacity-10 text-danger">{{ $statsK['Menyimpang'] }}</span>
+          </li>
+          <li class="d-flex justify-content-between py-1">
+            <span>Kosong</span><span class="badge bg-secondary">{{ $statsK['Kosong'] }}</span>
+          </li>
+        </ul>
+      </div>
+    </div>
+
+    {{-- Coverage PIC per Role --}}
+    <div class="card mt-3">
+      <div class="card-header d-flex align-items-center">
+        <h5 class="mb-0">PIC Coverage (Top 8)</h5>
+      </div>
+      <div class="list-group list-group-borderless">
+        @forelse($picCoverage as $pc)
+          <div class="list-group-item d-flex align-items-center">
+            <i class="ph-users-three me-2"></i>
+            <div class="me-auto">{{ optional($pc->role)->name ?? ('Role #'.$pc->role_id) }}</div>
+            <span class="badge bg-secondary">{{ $pc->c }}</span>
+          </div>
+        @empty
+          <div class="list-group-item text-muted">Belum ada assignment PIC.</div>
+        @endforelse
+      </div>
+    </div>
+
+    {{-- Kesenjangan Data --}}
+    <div class="card mt-3">
+      <div class="card-header">
+        <h5 class="mb-0">Kesenjangan Data</h5>
+      </div>
+      <div class="card-body">
+        <div class="mb-3">
+          <div class="fw-semibold mb-2">Standar tanpa Indikator</div>
+          @forelse($standardsNoIndicators as $s)
+            <div class="d-flex align-items-center mb-1">
+              <i class="ph-warning-circle text-warning me-2"></i>
+              <a href="{{ route('admin.ami.indicator', ['standard_id' => $s->id]) }}" class="text-body">
+                {{ $s->name }}
+              </a>
+              <span class="ms-2 text-muted small">TA {{ optional($s->academicConfig)->academic_code }}</span>
+            </div>
+          @empty
+            <div class="text-muted">Tidak ada.</div>
+          @endforelse
+        </div>
+
+        <div>
+          <div class="fw-semibold mb-2">Indikator tanpa PIC</div>
+          @forelse($indicatorsNoPic as $ind)
+            @php
+              $snippet = \Illuminate\Support\Str::limit(strip_tags($ind->description ?? ''), 60);
+            @endphp
+            <div class="d-flex align-items-center mb-1">
+              <i class="ph-user-circle-gear text-warning me-2"></i>
+              <a href="{{ route('admin.ami.indicator', ['standard_id' => $ind->standard_id]) }}" class="text-body">
+                {{ $snippet ?: 'Tanpa deskripsi' }}
+              </a>
+            </div>
+          @empty
+            <div class="text-muted">Tidak ada.</div>
+          @endforelse
+        </div>
+      </div>
+    </div>
+
+    {{-- Aksi Cepat --}}
+    <div class="card mt-3">
+      <div class="card-header">
+        <h5 class="mb-0">Aksi Cepat</h5>
+      </div>
+      <div class="list-group list-group-borderless">
+        <a class="list-group-item d-flex align-items-center" href="{{ route('admin.academic_config.index') }}">
+          <i class="ph-calendar-check me-2"></i> Set Tahun Akademik Aktif
+          <span class="ms-auto text-muted">&rarr;</span>
+        </a>
+        <a class="list-group-item d-flex align-items-center" href="{{ route('admin.ami.standard') }}">
+          <i class="ph-book-open me-2"></i> Kelola Standar
+          <span class="ms-auto text-muted">&rarr;</span>
+        </a>
+        <a class="list-group-item d-flex align-items-center" href="{{ route('admin.ami.indicator') }}">
+          <i class="ph-list-checks me-2"></i> Kelola Indikator & PIC
+          <span class="ms-auto text-muted">&rarr;</span>
+        </a>
+        <a class="list-group-item d-flex align-items-center" href="{{ route('admin.roles.index') }}">
+          <i class="ph-identification-badge me-2"></i> Kelola Role
+          <span class="ms-auto text-muted">&rarr;</span>
+        </a>
+      </div>
+    </div>
+
+  </div>
+</div>
 @endsection
 
 @push('styles')
-{{-- Tambahan styling kecil jika perlu --}}
-<style>
-  .letter-icon { width: 18px; height: 18px; display:block; }
-</style>
-@endpush
-
-@push('scripts')
-{{-- Tempatkan script khusus halaman di sini. Hindari load demo charts global. --}}
-{{-- Contoh: jika nanti pakai ECharts / D3, include hanya di halaman ini. --}}
+<style>.letter-icon{width:18px;height:18px;display:block}</style>
 @endpush

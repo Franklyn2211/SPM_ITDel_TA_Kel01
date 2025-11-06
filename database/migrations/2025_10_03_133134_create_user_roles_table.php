@@ -4,16 +4,15 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
-return new class extends Migration
-{
+return new class extends Migration {
     public function up(): void
     {
         Schema::create('user_roles', function (Blueprint $table) {
-            $table->string('id')->primary();                 // isi pakai generator (UUID/string) di model/controller
-            $table->string('cis_user_id');                   // FK -> users.cis_user_id (pastikan kolom itu ada & unique/indexed)
-            $table->string('role_id');                       // FK -> roles.id
-            $table->string('academic_config_id');            // FK -> academic_configs.id
-            $table->string('category_detail_id');
+            $table->string('id', 64)->primary();                 // isi pakai generator (UUID/string) di model/controller
+            $table->string('cis_user_id', 64);                   // FK -> users.cis_user_id (pastikan kolom itu ada & unique/indexed)
+            $table->string('role_id', 64);                       // FK -> roles.id
+            $table->string('academic_config_id', 64);            // FK -> academic_configs.id
+            $table->string('category_detail_id', 64);
             $table->unsignedBigInteger('created_by')->nullable();
             $table->unsignedBigInteger('updated_by')->nullable();
             $table->boolean('active')->default(true);
@@ -21,34 +20,36 @@ return new class extends Migration
 
             // Foreign keys
             $table->foreign('cis_user_id')
-                  ->references('cis_user_id')->on('users')
-                  ->cascadeOnUpdate()
-                  ->cascadeOnDelete();
+                ->references('cis_user_id')->on('users')
+                ->cascadeOnUpdate()
+                ->cascadeOnDelete();
 
             $table->foreign('role_id')
-                  ->references('id')->on('roles')
-                  ->cascadeOnDelete();
+                ->references('id')->on('roles')
+                ->cascadeOnDelete();
 
             $table->foreign('academic_config_id')
-                  ->references('id')->on('academic_configs')
-                  ->cascadeOnUpdate()
-                  ->cascadeOnDelete();
+                ->references('id')->on('academic_configs')
+                ->cascadeOnUpdate()
+                ->cascadeOnDelete();
 
             $table->foreign('category_detail_id')
-                  ->references('id')->on('ref_category_details')
-                  ->cascadeOnDelete();
+                ->references('id')->on('ref_category_details')
+                ->cascadeOnDelete();
 
             $table->foreign('created_by')
-                  ->references('id')->on('users')
-                  ->nullOnDelete();
+                ->references('id')->on('users')
+                ->nullOnDelete();
 
             $table->foreign('updated_by')
-                  ->references('id')->on('users')
-                  ->nullOnDelete();
+                ->references('id')->on('users')
+                ->nullOnDelete();
 
-            // Izinkan banyak role per user per tahun akademik,
-            // tapi satu baris per kombinasi role yang sama:
-            $table->unique(['cis_user_id', 'role_id', 'academic_config_id'], 'user_roles_unique_triplet');
+            // Unique per kombinasi (4 kolom) untuk dukung multi detail kategori
+            $table->unique(
+                ['cis_user_id', 'role_id', 'academic_config_id', 'category_detail_id'],
+                'user_roles_unique_quad'
+            );
 
             // Index bantu
             $table->index('cis_user_id');

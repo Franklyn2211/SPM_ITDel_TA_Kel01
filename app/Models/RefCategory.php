@@ -11,7 +11,7 @@ class RefCategory extends Model
     protected $primaryKey = 'id';
     public $incrementing = false;     // PK string
     protected $keyType = 'string';
-    protected $fillable = ['id','name','active','created_by','updated_by'];
+    protected $fillable = ['id', 'name','active','created_by','updated_by'];
     protected $casts = ['active' => 'boolean'];
 
     protected static function booted(): void

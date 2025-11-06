@@ -10,7 +10,6 @@
         <i class="ph-caret-down collapsible-indicator ph-sm m-1"></i>
       </a>
     </div>
-
     <div class="collapse d-lg-block my-lg-auto ms-lg-auto" id="page_header">
       <div class="d-lg-flex align-items-center">
         <button type="button" class="btn btn-primary btn-sm rounded-pill" data-bs-toggle="modal" data-bs-target="#modalCreateDetail">
@@ -35,6 +34,25 @@
 
 @section('content')
 <div class="content pt-0">
+
+  {{-- Alert error/sukses ala Limitless, no toast --}}
+  @if ($errors->any())
+    <div class="alert alert-danger border-0 alert-dismissible fade show">
+      <div class="d-flex">
+        <i class="ph-x-circle me-2"></i>
+        <div>
+          <strong>Gagal menyimpan.</strong>
+          <ul class="mb-0 mt-1">
+            @foreach ($errors->all() as $err)
+              <li>{{ $err }}</li>
+            @endforeach
+          </ul>
+        </div>
+      </div>
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+  @endif
+
   @if (session('success'))
     <div class="alert alert-success border-0 alert-dismissible fade show">
       <div class="d-flex align-items-center">
@@ -60,7 +78,7 @@
             <th class="text-center" width="50">No</th>
             <th>Kategori</th>
             <th>Detail</th>
-            <th class="text-center" width="120">Aksi</th>
+            <th class="text-center" width="140">Aksi</th>
           </tr>
         </thead>
         <tbody>
@@ -81,8 +99,9 @@
                   <i class="ph-pencil"></i>
                 </button>
 
+                {{-- FIX kutip nyasar di sini --}}
                 <button type="button" class="btn btn-danger btn-icon" title="Hapus"
-                  onclick="confirmDelete('{{route('admin.ref_category.detail.destroy', $detail->id)}}')'">
+                  onclick="confirmDelete('{{ route('admin.ref_category.detail.destroy', $detail->id) }}')">
                   <i class="ph-trash"></i>
                 </button>
               </div>
@@ -114,13 +133,17 @@
           <select name="category_id" class="form-select" required>
             <option value="">-- Pilih Kategori --</option>
             @foreach($category as $cat)
-              <option value="{{ $cat->id }}">{{ $cat->name }}</option>
+              <option value="{{ $cat->id }}" {{ old('category_id') == $cat->id ? 'selected' : '' }}>
+                {{ $cat->name }}
+              </option>
             @endforeach
           </select>
+          @error('category_id') <small class="text-danger">{{ $message }}</small> @enderror
         </div>
         <div class="mb-3">
           <label class="form-label">Detail</label>
-          <input type="text" class="form-control" name="name" required>
+          <input type="text" class="form-control" name="name" value="{{ old('name') }}" required>
+          @error('name') <small class="text-danger">{{ $message }}</small> @enderror
         </div>
       </div>
       <div class="modal-footer">
@@ -150,10 +173,12 @@
               <option value="{{ $cat->id }}">{{ $cat->name }}</option>
             @endforeach
           </select>
+          @error('category_id') <small class="text-danger">{{ $message }}</small> @enderror
         </div>
         <div class="mb-3">
           <label class="form-label">Detail</label>
-          <input type="text" class="form-control" name="name" id="edit_name" required>
+          <input type="text" class="form-control" name="name" id="edit_name" value="{{ old('name') }}" required>
+          @error('name') <small class="text-danger">{{ $message }}</small> @enderror
         </div>
       </div>
       <div class="modal-footer">
@@ -163,8 +188,10 @@
     </form>
   </div>
 </div>
+@endsection
 
 @push('scripts')
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script>
   // Search
   document.getElementById('searchDetail').addEventListener('keyup', function() {
@@ -176,7 +203,7 @@
     });
   });
 
-  // Isi form saat modal edit dibuka
+  // Fill modal edit on show
   const editDetailModal = document.getElementById('modalEditDetail');
   if (editDetailModal) {
     editDetailModal.addEventListener('show.bs.modal', function (event) {
@@ -187,27 +214,50 @@
       const catId  = btn.getAttribute('data-category') || '';
       const action = btn.getAttribute('data-action') || '';
 
-      const nameInput = editDetailModal.querySelector('#edit_name');
-      const catSelect = editDetailModal.querySelector('#edit_category_id');
-      const form      = document.getElementById('formEditDetail');
-
-      if (nameInput) nameInput.value = name;
-      if (catSelect) catSelect.value = catId;
-      if (form && action) form.action = action;
+      document.getElementById('edit_name').value = name;
+      document.getElementById('edit_category_id').value = catId;
+      document.getElementById('formEditDetail').action = action;
     });
   }
 
-  // Hapus
+  // Auto reopen modal when validation fails
+  @if (session('open_modal') === 'create')
+    new bootstrap.Modal(document.getElementById('modalCreateDetail')).show();
+  @elseif (session('open_modal') === 'edit')
+    // set action from session and old values
+    const form = document.getElementById('formEditDetail');
+    if (form) form.action = @json(session('edit_action'));
+    const editName = document.getElementById('edit_name');
+    if (editName) editName.value = @json(old('name'));
+    const editCat = document.getElementById('edit_category_id');
+    if (editCat) editCat.value = @json(old('category_id'));
+    new bootstrap.Modal(document.getElementById('modalEditDetail')).show();
+  @endif
+
+  // Konfirmasi hapus (tanpa ikon gede, tanpa toast)
   function confirmDelete(url) {
-    if (confirm('Hapus data ini?')) {
-      const f = document.createElement('form');
-      f.method = 'POST';
-      f.action = url;
-      f.innerHTML = `@csrf @method('DELETE')`;
-      document.body.appendChild(f);
-      f.submit();
-    }
+    Swal.fire({
+      title: 'Hapus data?',
+      text: 'Data yang dihapus tidak bisa dikembalikan.',
+      icon: undefined,
+      showCancelButton: true,
+      confirmButtonText: 'Ya',
+      cancelButtonText: 'Batal',
+      customClass: {
+        confirmButton: 'btn btn-primary',
+        cancelButton: 'btn btn-light'
+      },
+      buttonsStyling: false
+    }).then((res) => {
+      if (res.isConfirmed) {
+        const f = document.createElement('form');
+        f.method = 'POST';
+        f.action = url;
+        f.innerHTML = `@csrf @method('DELETE')`;
+        document.body.appendChild(f);
+        f.submit();
+      }
+    });
   }
 </script>
 @endpush
-@endsection

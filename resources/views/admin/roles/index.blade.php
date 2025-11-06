@@ -20,10 +20,10 @@
             <i class="ph-arrows-clockwise me-2"></i> Sync CIS
           </button>
         </form>
+
         <form class="d-none d-lg-block" method="GET" action="{{ url()->current() }}">
           <div class="input-group input-group-sm">
-            <input type="text" class="form-control" name="q" placeholder="Cari nama/username/email..."
-                   value="{{ request('q', request('search')) }}">
+            <input type="text" class="form-control" name="q" placeholder="Cari nama/username/email..." value="{{ request('q', request('search')) }}">
             @if(request()->filled('q') || request()->filled('search'))
               <a href="{{ url()->current() }}" class="btn btn-outline-secondary">Reset</a>
             @endif
@@ -57,6 +57,7 @@
       <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
     </div>
   @endif
+
   @if ($errors->any())
     <div class="alert alert-danger border-0 alert-dismissible fade show">
       <div><strong>Gagal menyimpan:</strong></div>
@@ -72,10 +73,10 @@
   <div class="card">
     <div class="card-header d-flex align-items-center">
       <h5 class="mb-0">Daftar Users</h5>
+
       <form class="ms-auto d-lg-none" method="GET" action="{{ url()->current() }}">
         <div class="input-group input-group-sm" style="max-width:360px;">
-          <input type="text" class="form-control" name="q" placeholder="Cari nama/username/email..."
-                 value="{{ request('q', request('search')) }}">
+          <input type="text" class="form-control" name="q" placeholder="Cari nama/username/email..." value="{{ request('q', request('search')) }}">
           @if(request()->filled('q') || request()->filled('search'))
             <a href="{{ url()->current() }}" class="btn btn-outline-secondary">Reset</a>
           @endif
@@ -99,27 +100,40 @@
         <tbody>
         @forelse ($users as $i => $u)
           @php
+            // Kelompokkan per TA dan rapikan agar tidak duplikat di tampilan
             $grouped = $u->roles
               ->groupBy('academic_config_id')
               ->map(function($items){
                   $first = $items->first();
                   $ac    = $first?->academicConfig;
+
+                  // role unik berdasarkan role_id
+                  $uniqueRoles = $items->unique('role_id');
+
                   return [
-                      'ac_id'     => $ac?->id,
-                      'ac_code'   => $ac?->academic_code,
-                      'roles'     => $items->pluck('role.name')->filter()->values(),
-                      'role_ids'  => $items->pluck('role_id')->values(),
-                    'c_detail_id' => $items->pluck('category_detail_id')->values(),
+                      'ac_id'       => $ac?->id,
+                      'ac_code'     => $ac?->academic_code,
+                      'roles'       => $uniqueRoles->pluck('role.name')->filter()->values(),
+                      'role_ids'    => $uniqueRoles->pluck('role_id')->values(),
+                      'c_detail_id' => $items->pluck('category_detail_id')->unique()->values(),
                   ];
               })
               ->values();
 
-            $firstRole      = $u->roles->first();
-            $defaultAcId    = $firstRole?->academicConfig?->id;
-            $defaultCdId    = $firstRole?->category_detail_id;
-            $defaultRoleIds = $defaultAcId
-              ? $u->roles->where('academic_config_id',$defaultAcId)->pluck('role_id')->values()
-              : collect();
+            // Peta untuk modal: key = academic_config_id
+            $assignmentMap = $u->roles
+              ->groupBy('academic_config_id')
+              ->mapWithKeys(function($items, $acId){
+                  $uniqueRoles = $items->unique('role_id');
+                  return [
+                    $acId => [
+                      'ac_code'     => optional($items->first()->academicConfig)->academic_code,
+                      'role_ids'    => $uniqueRoles->pluck('role_id')->values()->all(),
+                      'cdetail_ids' => $items->pluck('category_detail_id')->unique()->values()->all(),
+                    ]
+                  ];
+              })
+              ->toArray();
           @endphp
 
           <tr>
@@ -136,10 +150,11 @@
                       @foreach($g['roles'] as $rn)
                         <span class="badge bg-primary">{{ $rn }}</span>
                       @endforeach
-                        {{-- Detail Kategori --}}
-                        @foreach($g['c_detail_id'] as $cdId)
-                          <span class="badge bg-info text-dark">{{ $categoryDetail->firstWhere('id', $cdId)->name ?? '-' }}</span>
-                        @endforeach
+                      @foreach($g['c_detail_id'] as $cdId)
+                        <span class="badge bg-info text-dark">
+                          {{ $categoryDetail->firstWhere('id', $cdId)->name ?? '-' }}
+                        </span>
+                      @endforeach
                     </div>
                   @endforeach
                 </div>
@@ -153,7 +168,9 @@
                 class="btn btn-sm btn-primary rounded-pill"
                 data-bs-toggle="modal"
                 data-bs-target="#modalAssign"
-                data-cis="{{ $u->cis_user_id }}"  {{-- WAJIB: hanya cis_user_id --}}
+                data-cis="{{ $u->cis_user_id }}"
+                {{-- kirim JSON yang valid dan aman --}}
+                data-assign='@json($assignmentMap, JSON_HEX_APOS|JSON_HEX_QUOT|JSON_HEX_AMP)'
               >
                 {{ $grouped->count() ? 'Ubah' : 'Assign' }}
               </button>
@@ -202,29 +219,28 @@
         </div>
 
         <div class="mb-3">
-          <label class="form-label">Detail Kategori</label>
-          <select name="category_detail_id" id="assign_category_detail" class="form-select" required>
-            <option value="" selected disabled>Pilih detail kategori…</option>
+          <label class="form-label">Detail Kategori (bisa pilih lebih dari satu)</label>
+          <select name="category_detail_ids[]" id="assign_category_detail" class="form-select" multiple required size="5">
             @foreach($categoryDetail as $cd)
               <option value="{{ $cd->id }}">{{ $cd->name }}</option>
             @endforeach
           </select>
-          @error('category_detail_id') <div class="text-danger small mt-1">{{ $message }}</div> @enderror
+          @error('category_detail_ids') <div class="text-danger small mt-1">{{ $message }}</div> @enderror
+          @error('category_detail_ids.*') <div class="text-danger small mt-1">{{ $message }}</div> @enderror
         </div>
-<div class="mb-3">
-  <label class="form-label">Role (bisa pilih lebih dari satu)</label>
-  <select name="role_ids[]" id="assign_roles" class="form-select" multiple required size="6">
-    @foreach($roles as $r)
-      @php $cat = $r->category?->name; @endphp
-      <option value="{{ $r->id }}">
-        {{ $r->name }}@if($cat) ({{ $cat }}) @endif
-      </option>
-    @endforeach
-  </select>
-  @error('role_ids') <div class="text-danger small mt-1">{{ $message }}</div> @enderror
-  @error('role_ids.*') <div class="text-danger small mt-1">{{ $message }}</div> @enderror
-</div>
 
+        <div class="mb-3">
+          <label class="form-label">Role (bisa pilih lebih dari satu)</label>
+          <select name="role_ids[]" id="assign_roles" class="form-select" multiple required size="6">
+            @foreach($roles as $r)
+              @php $cat = $r->category?->name; @endphp
+              <option value="{{ $r->id }}">{{ $r->name }}@if($cat) ({{ $cat }}) @endif</option>
+            @endforeach
+          </select>
+          @error('role_ids') <div class="text-danger small mt-1">{{ $message }}</div> @enderror
+          @error('role_ids.*') <div class="text-danger small mt-1">{{ $message }}</div> @enderror
+        </div>
+      </div>
 
       <div class="modal-footer">
         <button type="button" class="btn btn-link" data-bs-dismiss="modal">Batal</button>
@@ -233,96 +249,103 @@
     </form>
   </div>
 </div>
+@endsection
 
 @push('scripts')
-{{-- Select2 opsional; form tetap jalan walau tidak ada --}}
 <script>
-  (function () {
-    const assignModalEl = document.getElementById('modalAssign');
+(function () {
+  const modalEl = document.getElementById('modalAssign');
+  if (!modalEl) return;
 
-    if (!assignModalEl) return;
+  const cisInput = document.getElementById('assign_cis_user_id');
+  const acSel    = document.getElementById('assign_academic');
+  const cdSel    = document.getElementById('assign_category_detail');
+  const roleSel  = document.getElementById('assign_roles');
 
-    // Helper: inisialisasi Select2 kalau tersedia
-    function tryInitSelect2() {
-      if (window.jQuery && window.$ && $.fn && $.fn.select2) {
-        const $m = $('#modalAssign');
+  function setMultiSelect(selectEl, values) {
+    const set = new Set(values || []);
+    Array.from(selectEl.options).forEach(o => o.selected = set.has(o.value));
+  }
 
-        // Destroy dulu biar tidak double-initialize
-        $m.find('#assign_academic, #assign_roles').each(function(){
-          if ($(this).hasClass('select2-hidden-accessible')) {
-            $(this).select2('destroy');
-          }
-        });
+  function syncSelect2() {
+    if (window.jQuery && $.fn && $.fn.select2) {
+      const $m = $('#modalAssign');
+      ['#assign_academic','#assign_category_detail','#assign_roles'].forEach(id => {
+        const $el = $(id);
+        if ($el.hasClass('select2-hidden-accessible')) $el.select2('destroy');
+      });
+      $('#assign_academic').select2({ dropdownParent: $m, width:'100%', placeholder:'Pilih tahun akademik…' });
+      $('#assign_category_detail').select2({ dropdownParent: $m, width:'100%', multiple:true, closeOnSelect:false, placeholder:'Pilih detail kategori…' });
+      $('#assign_roles').select2({ dropdownParent: $m, width:'100%', multiple:true, closeOnSelect:false, placeholder:'Pilih role…' });
+    }
+  }
 
-        $('#assign_academic').select2({
-          dropdownParent: $m,
-          width: '100%',
-          allowClear: true,
-          placeholder: 'Pilih tahun akademik…',
-          minimumResultsForSearch: 0
-        });
+  modalEl.addEventListener('show.bs.modal', function (evt) {
+    const btn = evt.relatedTarget;
+    const cis = btn?.getAttribute('data-cis') || '';
+    const mapStr = btn?.getAttribute('data-assign') || '{}';
+    let assignMap = {};
+    try { assignMap = JSON.parse(mapStr); } catch(e) { assignMap = {}; }
 
-        $('#assign_roles').attr('multiple','multiple').select2({
-          dropdownParent: $m,
-          width: '100%',
-          closeOnSelect: false,
-          allowClear: true,
-          multiple: true,
-          placeholder: 'Pilih role…',
-          minimumResultsForSearch: 0
-        }).on('select2:select', function(){ $(this).select2('open'); });
+    // reset
+    cisInput.value = cis;
+    acSel.value = '';
+    setMultiSelect(cdSel, []);
+    setMultiSelect(roleSel, []);
+    syncSelect2();
+
+    // pilih default: kalau ada 1 TA, pakai itu; kalau >1, pakai TA pertama
+    const acIds = Object.keys(assignMap || {});
+    if (acIds.length >= 1) {
+      const defaultAcId = acIds[0]; // aman dan simpel
+      acSel.value = defaultAcId;
+
+      const entry = assignMap[defaultAcId] || { cdetail_ids:[], role_ids:[] };
+      setMultiSelect(cdSel, entry.cdetail_ids || []);
+      setMultiSelect(roleSel, entry.role_ids || []);
+
+      if (window.jQuery && $.fn.select2) {
+        $('#assign_academic').val(defaultAcId).trigger('change');
+        $('#assign_category_detail').val(entry.cdetail_ids || []).trigger('change');
+        $('#assign_roles').val(entry.role_ids || []).trigger('change');
       }
     }
 
-    assignModalEl.addEventListener('show.bs.modal', function (event) {
-      const btn = event.relatedTarget;
-      if (!btn) return;
+    // ganti TA -> sinkron nilai
+    acSel.onchange = function () {
+      const acId = acSel.value || '';
+      const entry = (assignMap && assignMap[acId]) ? assignMap[acId] : { cdetail_ids:[], role_ids:[] };
+      setMultiSelect(cdSel, entry.cdetail_ids);
+      setMultiSelect(roleSel, entry.role_ids);
+      if (window.jQuery && $.fn.select2) {
+        $('#assign_category_detail').val(entry.cdetail_ids).trigger('change');
+        $('#assign_roles').val(entry.role_ids).trigger('change');
+      }
+    };
+  });
 
-      // 1) SET cis_user_id SEBELUM yang lain (tanpa ketergantungan select2/jQuery)
-      const cis = btn.getAttribute('data-cis') || '';
-      document.getElementById('assign_cis_user_id').value = cis;
+  @if ($errors->any())
+  document.addEventListener('DOMContentLoaded', function () {
+    const m = new bootstrap.Modal(modalEl); m.show();
 
-      // 2) Bersihkan pilihan default (agar tidak membawa dari user lain)
-      const acSel   = document.getElementById('assign_academic');
-      const rolesEl = document.getElementById('assign_roles');
+    const oldCis = @json(old('cis_user_id',''));
+    const oldAc  = @json(old('academic_config_id',''));
+    const oldCds = @json(old('category_detail_ids',[]));
+    const oldRs  = @json(old('role_ids',[]));
 
-      if (acSel)   acSel.value = '';
-      if (rolesEl) Array.from(rolesEl.options).forEach(o => o.selected = false);
+    cisInput.value = oldCis;
+    acSel.value = oldAc || '';
+    setMultiSelect(cdSel, oldCds);
+    setMultiSelect(roleSel, oldRs);
 
-      // 3) Inisialisasi Select2 jika ada (tidak wajib)
-      tryInitSelect2();
-    });
-
-    // Jika ada error validasi, buka kembali modal dan restore nilai lama
-    @if ($errors->any())
-      document.addEventListener('DOMContentLoaded', function () {
-        const m = new bootstrap.Modal(assignModalEl);
-        m.show();
-
-        // Restore nilai lama
-        const oldCis = @json(old('cis_user_id', ''));
-        const oldAc  = @json(old('academic_config_id', ''));
-        const oldCd  = @json(old('category_detail_id', ''));
-        const oldRs  = @json(old('role_ids', []));
-
-        document.getElementById('assign_cis_user_id').value = oldCis;
-
-        const acSel   = document.getElementById('assign_academic');
-        const rolesEl = document.getElementById('assign_roles');
-
-        if (acSel)   acSel.value = oldAc || '';
-        if (rolesEl && Array.isArray(oldRs)) {
-          Array.from(rolesEl.options).forEach(o => o.selected = oldRs.includes(o.value));
-        }
-
-        tryInitSelect2();
-        if (window.jQuery && $.fn.select2) {
-          $('#assign_academic').val(oldAc || '').trigger('change');
-          $('#assign_roles').val(oldRs || []).trigger('change');
-        }
-      });
-    @endif
-  })();
+    syncSelect2();
+    if (window.jQuery && $.fn.select2) {
+      $('#assign_academic').val(oldAc || '').trigger('change');
+      $('#assign_category_detail').val(oldCds || []).trigger('change');
+      $('#assign_roles').val(oldRs || []).trigger('change');
+    }
+  });
+  @endif
+})();
 </script>
 @endpush
-@endsection

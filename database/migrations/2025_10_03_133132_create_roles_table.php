@@ -19,6 +19,8 @@ return new class extends Migration
             $table->foreign('category_id')->references('id')->on('ref_categories')->cascadeOnDelete();
             $table->foreign('created_by')->references('id')->on('users')->nullOnDelete();
             $table->foreign('updated_by')->references('id')->on('users')->nullOnDelete();
+
+            $table->unique('name', 'unique_role_name');
         });
     }
 

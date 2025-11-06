@@ -460,14 +460,16 @@ class EvaluasiDiriController extends Controller
         $taName   = optional($form->academicConfig)->name ?? '-';
         $unitName = optional($form->categoryDetail)->name ?? '-';
 
-        $ketua = trim(($form->ketua_auditee_nama ?? '') . ' / ' . ($form->ketua_auditee_jabatan ?? ''), ' /');
-        $angg1 = trim(($form->anggota_auditee_satu ?? '') . ' / ' . ($form->anggota_auditee_jabatan_satu ?? ''), ' /');
-        $angg2 = trim(($form->anggota_auditee_dua ?? '') . ' / ' . ($form->anggota_auditee_jabatan_dua ?? ''), ' /');
-        $angg3 = trim(($form->anggota_auditee_tiga ?? '') . ' / ' . ($form->anggota_auditee_jabatan_tiga ?? ''), ' /');
+        $ketua = trim(($form->ketua_auditee_jabatan ?? '') . ' / ' . ($form->ketua_auditee_nama ?? ''), ' /');
+        $namaketua = trim(($form->ketua_auditee_nama ?? ''));
+        $angg1 = trim(($form->anggota_auditee_jabatan_satu ?? '') . ' / ' . ($form->anggota_auditee_satu ?? ''), ' /');
+        $angg2 = trim(($form->anggota_auditee_jabatan_dua ?? '') . ' / ' . ($form->anggota_auditee_dua ?? ''), ' /');
+        $angg3 = trim(($form->anggota_auditee_jabatan_tiga ?? '') . ' / ' . ($form->anggota_auditee_tiga ?? ''), ' /');
 
         $tp->setValue('categoryDetail', $unitName);
         $tp->setValue('ta', $taName);
         $tp->setValue('ketua', $ketua ?: '-');
+        $tp->setValue('namaketua', $namaketua ?: '-');
         $tp->setValue('anggota1', $angg1 ?: '-');
         $tp->setValue('anggota2', $angg2 ?: '-');
         $tp->setValue('anggota3', $angg3 ?: '-');
@@ -488,10 +490,10 @@ class EvaluasiDiriController extends Controller
                 'hasil'           => trim((string)$d->hasil) ?: '—',
                 'bukti'           => trim((string)$d->bukti_pendukung) ?: '—',
                 'faktor'          => trim((string)$d->faktor_penghambat_pendukung) ?: '—',
-                'melampaui'       => $flag === 'melampaui' ? '✓ Melampaui' : '',
-                'mencapai'        => $flag === 'mencapai' ? '✓ Mencapai' : '',
-                'tidak_mencapai'  => $flag === 'tidak mencapai' ? '✓ Tidak Mencapai' : '',
-                'menyimpang'      => $flag === 'menyimpang' ? '✓ Menyimpang' : '',
+                'melampaui'       => $flag === 'melampaui' ? '✓' : '',
+                'mencapai'        => $flag === 'mencapai' ? '✓' : '',
+                'tidak_mencapai'  => $flag === 'tidak mencapai' ? '✓' : '',
+                'menyimpang'      => $flag === 'menyimpang' ? '✓' : '',
             ];
         }
 

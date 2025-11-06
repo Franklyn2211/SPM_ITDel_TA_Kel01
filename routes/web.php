@@ -40,7 +40,7 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'admin.byname'])->gr
 
     Route::post('cis-sync', [CisSyncController::class, 'run'])->name('cis.sync');
 
-    Route::get('/dashboard', fn() => view('admin.dashboard'))->name('dashboard');
+    Route::get('/dashboard', [\App\Http\Controllers\Admin\DashboardController::class, 'index'])->name('dashboard');
 
     // RefCategory
     Route::get('ref_category', [RefCategoryController::class, 'index'])->name('ref_category.index');

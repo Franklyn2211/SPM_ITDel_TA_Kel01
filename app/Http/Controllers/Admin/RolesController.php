@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\RefCategory;
 use App\Models\Role;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class RolesController extends Controller
 {
@@ -19,7 +20,9 @@ class RolesController extends Controller
     public function store(Request $request)
     {
         $request->validate([
-            'name' => 'required|string|max:255'
+            'name' => ['required', 'string', 'max:255', 'unique:roles,name'],
+        ], [
+            'name.unique' => 'Role tersebut sudah terdaftar.',
         ]);
 
         $role = new Role([
@@ -37,7 +40,12 @@ class RolesController extends Controller
     public function update(Request $request, Role $role)
     {
         $request->validate([
-            'name' => 'required|string|max:255'
+            'name' => [
+                'required', 'string', 'max:255',
+                Rule::unique('roles','name')->ignore($role->id, 'id'),
+        ],
+        ], [
+            'name.unique' => 'Role tersebut sudah terdaftar.',
         ]);
 
         $data = [

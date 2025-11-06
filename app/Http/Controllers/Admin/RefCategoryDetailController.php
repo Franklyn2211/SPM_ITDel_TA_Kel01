@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\RefCategory;
 use App\Models\RefCategoryDetail;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class RefCategoryDetailController extends Controller
 {
@@ -19,45 +20,50 @@ class RefCategoryDetailController extends Controller
     public function store(Request $request)
     {
         $request->validate([
-            'name' => 'required|string|max:255',
+            'category_id' => ['required','string','exists:ref_categories,id'],
+            'name'        => ['required','string','max:255','unique:ref_category_details,name'],
+        ], [
+            'name.unique' => 'Detail kategori dengan nama yang sama sudah terdaftar.',
         ]);
 
-        $categoryDetails = new RefCategoryDetail([
-            'id' => RefCategoryDetail::generateNextId(),
+        $detail = new RefCategoryDetail([
+            'id'   => RefCategoryDetail::generateNextId(),
             'name' => $request->get('name'),
         ]);
 
         $category = RefCategory::findOrFail($request->get('category_id'));
-        $categoryDetails->category()->associate($category);
+        $detail->category()->associate($category);
+        $detail->save();
 
-        $categoryDetails->save();
         return redirect()->route('admin.ref_category.detail')->with('success', 'Category Detail created successfully.');
     }
 
     public function update(Request $request, RefCategoryDetail $categoryDetail)
     {
         $request->validate([
-            'name' => 'required|string|max:255',
+            'category_id' => ['required','string','exists:ref_categories,id'],
+            'name'        => [
+                'required','string','max:255',
+                Rule::unique('ref_category_details','name')->ignore($categoryDetail->id, 'id'),
+            ],
+        ], [
+            'name.unique' => 'Detail kategori dengan nama yang sama sudah terdaftar.',
         ]);
-
-        $data = [
-            'name' => $request->get('name'),
-        ];
 
         if ($request->has('category_id')) {
             $category = RefCategory::findOrFail($request->get('category_id'));
             $categoryDetail->category()->associate($category);
         }
 
-        $categoryDetail->update($data);
+        $categoryDetail->update(['name' => $request->get('name')]);
 
         return redirect()->route('admin.ref_category.detail')->with('success', 'Category Detail updated successfully.');
     }
 
     public function destroy($id)
     {
-        $categoryDetail = RefCategoryDetail::findOrFail($id);
-        $categoryDetail->delete();
+        $detail = RefCategoryDetail::findOrFail($id);
+        $detail->delete();
         return redirect()->route('admin.ref_category.detail')->with('success', 'Category Detail deleted successfully.');
     }
 }
