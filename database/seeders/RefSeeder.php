@@ -2,10 +2,10 @@
 
 namespace Database\Seeders;
 
+use App\Models\EvaluationStatus;
+use App\Models\StandardAchievement;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
-use App\Models\KetercapaianStandard;
-use App\Models\StatusEvaluasi;
 
 class RefSeeder extends Seeder
 {
@@ -20,8 +20,8 @@ class RefSeeder extends Seeder
         ];
 
         foreach ($ketercapaian as $name) {
-            DB::table('ref_ketercapaian_standard')->insert([
-                'id' => KetercapaianStandard::generateNextId(),
+            DB::table('ref_standard_achievements')->insert([
+                'id' => StandardAchievement::generateNextId(),
                 'name' => $name,
                 'active' => true,
             ]);
@@ -35,8 +35,8 @@ class RefSeeder extends Seeder
         ];
 
         foreach ($status as $name) {
-            DB::table('ref_status_evaluasi')->insert([
-                'id' => StatusEvaluasi::generateNextId(),
+            DB::table('ref_evaluation_status')->insert([
+                'id' => EvaluationStatus::generateNextId(),
                 'name' => $name,
                 'active' => true,
             ]);

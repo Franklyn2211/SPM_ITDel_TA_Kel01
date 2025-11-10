@@ -51,6 +51,7 @@
       <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
     </div>
   @endif
+
   @if (session('success'))
     <div class="alert alert-success border-0 alert-dismissible fade show">
       <div class="d-flex align-items-center">
@@ -62,12 +63,10 @@
   @endif
 
   <div class="card">
-    <div class="card-header">
+    <div class="card-header d-flex align-items-center">
       <h5 class="mb-0">Daftar Kategori</h5>
-      <div class="d-flex align-items-center">
-        <div class="ms-auto">
-          <input type="text" class="form-control" placeholder="Cari kategori..." id="searchCategory">
-        </div>
+      <div class="ms-auto">
+        <input type="text" class="form-control" placeholder="Cari kategori..." id="searchCategory">
       </div>
     </div>
 
@@ -83,7 +82,8 @@
         <tbody>
           @forelse($category as $cat)
           <tr>
-            <td class="text-center">{{ $loop->iteration }}</td>
+            {{-- Nomor global sesuai pagination --}}
+            <td class="text-center">{{ $category->firstItem() + $loop->index }}</td>
             <td>{{ $cat->name }}</td>
             <td>
               <div class="d-flex justify-content-center gap-2">
@@ -106,6 +106,17 @@
         </tbody>
       </table>
     </div>
+
+    @if($category instanceof \Illuminate\Pagination\LengthAwarePaginator && $category->hasPages())
+    <div class="card-footer d-flex align-items-center">
+      <span class="text-muted me-auto">
+        Showing {{ $category->firstItem() }} to {{ $category->lastItem() }} of {{ $category->total() }} entries
+      </span>
+      <div>
+        {{ $category->onEachSide(1)->links('pagination::bootstrap-5') }}
+      </div>
+    </div>
+    @endif
   </div>
 </div>
 
@@ -160,6 +171,7 @@
 @push('scripts')
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script>
+  // Pencarian client-side
   document.getElementById('searchCategory').addEventListener('keyup', function() {
     const q = this.value.toLowerCase();
     document.querySelectorAll('tbody tr').forEach(row => {
@@ -188,9 +200,11 @@
     }).then((r) => {
       if (r.isConfirmed) {
         const f = document.createElement('form');
-        f.method = 'POST'; f.action = url;
+        f.method = 'POST';
+        f.action = url;
         f.innerHTML = `@csrf @method('DELETE')`;
-        document.body.appendChild(f); f.submit();
+        document.body.appendChild(f);
+        f.submit();
       }
     });
   }

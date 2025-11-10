@@ -1,5 +1,5 @@
 {{-- resources/views/admin/ami/standard.blade.php --}}
-@extends('admin.layouts.app') {{-- pakai layout yang sama biar seragam tampilan --}}
+@extends('admin.layouts.app')
 @section('title', 'Standar AMI')
 
 @section('page-header')
@@ -13,11 +13,46 @@
     </div>
 
     <div class="collapse d-lg-block my-lg-auto ms-lg-auto" id="page_header">
-      <div class="d-lg-flex align-items-center">
+  <div class="d-lg-flex align-items-center gap-2">
+
+        {{-- Tombol tambah standar --}}
         <button type="button" class="btn btn-primary btn-sm rounded-pill" data-bs-toggle="modal" data-bs-target="#modalCreateStandard">
           <i class="ph-plus me-2"></i>
           Tambah Standar
         </button>
+
+        @php $isHistory = request()->boolean('history'); @endphp
+
+        {{-- TOMBOL GLOBAL: submit semua / set semua draft (hanya saat TA aktif) --}}
+        @unless($isHistory)
+          <form method="POST" id="formGlobalSubmit"
+                action="{{ route('admin.ami.standard.submit') }}">
+            @csrf
+            <input type="hidden" name="mode" value="{{ $anyActive ? 'deactivate' : 'activate' }}">
+
+            <button type="button"
+                    class="btn btn-sm rounded-pill {{ $anyActive ? 'btn-outline-secondary' : 'btn-success' }}"
+                    data-bs-toggle="modal" data-bs-target="#modalGlobalSubmit">
+              @if($anyActive)
+                <i class="ph-arrow-counter-clockwise me-2"></i> Set Semua Draft
+              @else
+                <i class="ph-paper-plane-tilt me-2"></i> Submit Semua Standar
+              @endif
+            </button>
+          </form>
+        @endunless
+
+        {{-- Toggle Riwayat / Tahun Aktif --}}
+        @if($isHistory)
+          <a href="{{ route('admin.ami.standard') }}" class="btn btn-outline-secondary btn-sm rounded-pill">
+            <i class="ph-clock-counter-clockwise me-2"></i> Kembali ke Tahun Aktif
+          </a>
+        @else
+          <a href="{{ route('admin.ami.standard', ['history' => 1]) }}" class="btn btn-outline-secondary btn-sm rounded-pill">
+            <i class="ph-clock-afternoon me-2"></i> Riwayat
+          </a>
+        @endif
+
       </div>
     </div>
   </div>
@@ -36,12 +71,22 @@
 @section('content')
 <div class="content pt-0">
 
-  {{-- Flash message --}}
+  {{-- Flash message: success / error --}}
   @if (session('success'))
     <div class="alert alert-success border-0 alert-dismissible fade show">
       <div class="d-flex align-items-center">
         <i class="ph-check-circle me-2"></i>
         {{ session('success') }}
+      </div>
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+  @endif
+
+  @if (session('error'))
+    <div class="alert alert-danger border-0 alert-dismissible fade show">
+      <div class="d-flex align-items-center">
+        <i class="ph-warning me-2"></i>
+        {{ session('error') }}
       </div>
       <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
     </div>
@@ -84,27 +129,72 @@
             <th class="text-center" style="width: 60px;">No</th>
             <th>Nama Standar</th>
             <th style="width: 220px;">Tahun Akademik</th>
-            <th class="text-center" style="width: 140px;">Indikator Kinerja</th>
-            <th class="text-center" style="width: 120px;">Aksi</th>
+            <th class="text-center" style="width: 160px;">Indikator Kinerja</th>
+            <th class="text-center" style="width: 160px;">Status</th>
+            <th class="text-center" style="width: 180px;">Aksi</th>
           </tr>
         </thead>
         <tbody>
           @forelse($rows as $row)
+            @php
+              $indikatorCount = $row->indicators_count ?? 0;
+            @endphp
             <tr>
-              <td class="text-center">{{ $loop->iteration + ($rows->currentPage()-1)*$rows->perPage() }}</td>
-              <td class="td-name">{{ $row->name }}</td>
-              <td class="td-ac">{{ $row->academicConfig->academic_code ?? '-' }}</td>
               <td class="text-center">
-                <a href="{{ route('admin.ami.indicator', ['standard_id' => $row->id]) }}" class="badge bg-primary" title="Lihat semua indikator standar ini">
-                    {{ $row->indicators_count ?? 0 }}
-                </a>
-                </td>
+                {{ $loop->iteration + ($rows->currentPage()-1)*$rows->perPage() }}
+              </td>
+
+              <td class="td-name">
+                <div class="d-flex flex-column">
+                  <div class="d-flex align-items-center gap-2">
+                    <span class="fw-semibold">{{ $row->name }}</span>
+                    @if($row->active)
+                      <span class="badge bg-success rounded-pill">Aktif</span>
+                    @else
+                      <span class="badge bg-secondary rounded-pill">Draft</span>
+                    @endif
+                  </div>
+                  <div class="text-muted fs-sm">
+                    Dibuat:
+                    {{ optional($row->created_at)->format('d/m/Y') ?? '-' }}
+                    @if($row->createdBy)
+                      · oleh {{ $row->createdBy->name }}
+                    @endif
+                  </div>
+                </div>
+              </td>
+
+              <td class="td-ac">
+                {{ $row->academicConfig->academic_code ?? '-' }}
+              </td>
 
               <td class="text-center">
-                <div class="d-flex justify-content-center gap-2">
+                <a href="{{ route('admin.ami.indicator', ['standard_id' => $row->id]) }}"
+                   class="badge {{ $indikatorCount > 0 ? 'bg-primary' : 'bg-secondary' }}"
+                   title="Lihat semua indikator standar ini">
+                  {{ $indikatorCount }} indikator
+                </a>
+              </td>
+
+              <td class="text-center">
+                @if($row->active)
+                  <span class="text-success">
+                    <i class="ph-check-circle me-1"></i> Tersubmit
+                  </span>
+                @else
+                  <span class="text-muted">
+                    <i class="ph-clock-afternoon me-1"></i> Belum disubmit
+                  </span>
+                @endif
+              </td>
+
+              <td class="text-center">
+                <div class="d-flex justify-content-center flex-wrap gap-1">
+
+                  {{-- Edit --}}
                   <button
                     type="button"
-                    class="btn btn-warning btn-icon"
+                    class="btn btn-warning btn-icon btn-sm"
                     title="Edit"
                     onclick="openEditStandardModal(
                       {{ Js::from($row->id) }},
@@ -114,19 +204,26 @@
                     <i class="ph-pencil"></i>
                   </button>
 
+                  {{-- Hapus --}}
                   <button
                     type="button"
-                    class="btn btn-danger btn-icon"
+                    class="btn btn-danger btn-icon btn-sm"
                     title="Hapus"
                     onclick="confirmDelete('{{ route('admin.ami.standard.destroy', $row->id) }}')">
                     <i class="ph-trash"></i>
                   </button>
                 </div>
+
+                @if($indikatorCount == 0)
+                  <div class="text-muted fs-xs mt-1">
+                    Standar ini belum punya indikator aktif.
+                  </div>
+                @endif
               </td>
             </tr>
           @empty
             <tr>
-              <td colspan="5" class="text-center text-muted">Belum ada standar AMI</td>
+              <td colspan="6" class="text-center text-muted">Belum ada standar AMI</td>
             </tr>
           @endforelse
         </tbody>
@@ -193,8 +290,22 @@
   </div>
 </div>
 
+@push('styles')
+<style>
+  .modal .modal-body {
+    max-height: calc(100vh - 200px);
+    overflow-y: auto;
+  }
+</style>
+@endpush
+
 @push('scripts')
 <script>
+  // Global submit confirmation (only exists in Tahun Aktif mode)
+  document.getElementById('btnConfirmGlobalSubmit')?.addEventListener('click', function () {
+    document.getElementById('formGlobalSubmit')?.submit();
+  });
+
   // Client-side filter: cari pada kolom Nama & Kode Akademik
   const inputFilter = document.getElementById('searchStandard');
   const btnReset    = document.getElementById('btnResetFilter');
@@ -205,7 +316,6 @@
     const rows = table.querySelectorAll('tbody tr');
 
     rows.forEach(tr => {
-      // skip row kosong
       const name = (tr.querySelector('.td-name')?.textContent || '').toLowerCase();
       const ac   = (tr.querySelector('.td-ac')?.textContent || '').toLowerCase();
       tr.style.display = (name.includes(q) || ac.includes(q)) ? '' : 'none';
@@ -240,4 +350,35 @@
   }
 </script>
 @endpush
+
+{{-- Modal: Confirm Global Submit --}}
+<div class="modal fade" id="modalGlobalSubmit" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">
+          {{ $anyActive ? 'Set Semua Draft' : 'Submit Semua Standar' }}
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <p class="mb-0">
+          {{ $anyActive
+            ? 'Kembalikan SEMUA standar ke draft? Indikator tidak akan tampil di auditee.'
+            : 'Submit SEMUA standar yang punya indikator aktif ke auditee?' }}
+        </p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Batal</button>
+        <button type="button" id="btnConfirmGlobalSubmit" class="btn {{ $anyActive ? 'btn-outline-secondary' : 'btn-success' }}">
+          @if($anyActive)
+            <i class="ph-arrow-counter-clockwise me-2"></i> Set Semua Draft
+          @else
+            <i class="ph-paper-plane-tilt me-2"></i> Submit Semua Standar
+          @endif
+        </button>
+      </div>
+    </div>
+  </div>
+  </div>
 @endsection

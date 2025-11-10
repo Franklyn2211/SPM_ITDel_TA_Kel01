@@ -50,6 +50,7 @@
   </div>
 
   {{-- Core JS --}}
+  <script src="{{ asset('assets/js/jquery/jquery.min.js') }}"></script>
   <script src="{{ asset('assets/js/bootstrap/bootstrap.bundle.min.js') }}"></script>
   <script src="{{ asset('assets/js/app.js') }}"></script>
   <script src="{{ asset('assets/js/vendor/forms/selects/bootstrap_multiselect.js') }}"></script>

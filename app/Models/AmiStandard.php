@@ -62,20 +62,12 @@ class AmiStandard extends Model
     public function academicConfig() { return $this->belongsTo(AcademicConfig::class, 'academic_config_id', 'id'); }
     public function indicators() { return $this->hasMany(AmiStandardIndicator::class, 'standard_id', 'id'); }
 
-    public static function generateNextId()
+    public static function generateNextId(): string
     {
-        // Mendapatkan ID terakhir dari database
-        $latestId = self::orderBy('id', 'desc')->first();
-
-        // Mengambil nomor dari ID terakhir
-        $lastNumber = $latestId ? intval(substr($latestId->id, 2)) : 0;
-
-        // Menambahkan 1 untuk mendapatkan nomor berikutnya
-        $nextNumber = $lastNumber + 1;
-
-        // Mengonversi nomor berikutnya ke format yang diinginkan (ACXXX)
-        $nextId = 'AS' . str_pad($nextNumber, 3, '0', STR_PAD_LEFT);
-
-        return $nextId;
+        $max = (int) static::where('id','like','AS%')
+            ->selectRaw("MAX(CAST(SUBSTRING(id,3) AS UNSIGNED)) as m")
+            ->value('m');
+        $next = 'AS'.str_pad((string)($max+1),3,'0',STR_PAD_LEFT);
+        return static::where('id',$next)->exists() ? static::generateNextId() : $next;
     }
 }

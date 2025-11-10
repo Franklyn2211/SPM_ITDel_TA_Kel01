@@ -7,11 +7,11 @@ use App\Models\AcademicConfig;
 use App\Models\AmiStandard;
 use App\Models\AmiStandardIndicator;
 use App\Models\AmiStandardIndicatorPic;
-use App\Models\EvaluasiDiri;
-use App\Models\EvaluasiDiriDetail;
-use App\Models\KetercapaianStandard;
+use App\Models\SelfEvaluationForm;
+use App\Models\SelfEvaluationDetail;
+use App\Models\StandardAchievement;
 use App\Models\Role;
-use App\Models\StatusEvaluasi;
+use App\Models\EvaluationStatus;
 use Illuminate\Support\Facades\DB;
 
 class DashboardController extends Controller
@@ -27,15 +27,17 @@ class DashboardController extends Controller
             ->whereHas('academicConfig', fn($q) => $q->where('active', 1));
 
         $indQuery = AmiStandardIndicator::query()
-            ->whereHas('standard', fn($q) =>
+            ->whereHas(
+                'standard',
+                fn($q) =>
                 $q->whereHas('academicConfig', fn($qq) => $qq->where('active', 1))
             );
 
         $counts = [
-            'standards'  => (clone $stdQuery)->count(),
+            'standards' => (clone $stdQuery)->count(),
             'indicators' => (clone $indQuery)->count(),
-            'roles'      => Role::where('active', 1)->count(),
-            'pics'       => AmiStandardIndicatorPic::count(),
+            'roles' => Role::where('active', 1)->count(),
+            'pics' => AmiStandardIndicatorPic::count(),
         ];
 
         // ===== Gap data =====
@@ -52,48 +54,49 @@ class DashboardController extends Controller
             ->get(['id', 'standard_id', 'description']); // tidak ada code/name di indikator
 
         // ===== FED pada TA aktif =====
-        $submittedId = StatusEvaluasi::where('name', 'Dikirim')->value('id');
+        $submittedId = EvaluationStatus::where('name', 'Dikirim')->value('id');
 
-        $formsActiveTA = EvaluasiDiri::query()
+        $formsActiveTA = SelfEvaluationForm::query()
             ->where('academic_config_id', optional($activeAc)->id)
             ->with(['categoryDetail:id,name'])
-            ->get(['id','category_detail_id','status_id','updated_at','tanggal_submit']);
+            ->get(['id', 'category_detail_id', 'status_id', 'updated_at', 'submitted_at']);
 
         $queueSubmitted = $formsActiveTA->where('status_id', $submittedId)->values();
 
         // Detail FED untuk progress dan statistik
-        $detailsActiveTA = EvaluasiDiriDetail::query()
-            ->whereIn('form_evaluasi_diri_id', $formsActiveTA->pluck('id'))
+        $detailsActiveTA = SelfEvaluationDetail::query()
+            ->whereIn('self_evaluation_form_id', $formsActiveTA->pluck('id'))
             ->get([
                 'id',
-                'form_evaluasi_diri_id',
+                'self_evaluation_form_id',
                 'ami_standard_indicator_id',
-                'ketercapaian_standard_id',
-                'hasil',
+                'standard_achievement_id',
+                'result',
                 'updated_at',
                 'updated_by',
             ]);
 
         $filledByForm = $detailsActiveTA
-            ->groupBy('form_evaluasi_diri_id')
+            ->groupBy('self_evaluation_form_id')
             ->map(function ($g) {
                 $t = $g->count();
-                $f = $g->filter(fn($d) =>
-                    !is_null($d->ketercapaian_standard_id)
-                    || (isset($d->hasil) && trim((string) $d->hasil) !== '')
+                $f = $g->filter(
+                    fn($d) =>
+                    !is_null($d->standard_achievement_id)
+                    || (isset($d->result) && trim((string) $d->result) !== '')
                 )->count();
                 return ['total' => $t, 'terisi' => $f, 'percent' => $t ? round(100 * $f / $t, 1) : 0.0];
             });
 
         // Aktivitas terbaru (join nama updater)
-        $recent = EvaluasiDiriDetail::query()
-            ->leftJoin('user_roles as ur', 'ur.id', '=', 'form_evaluasi_diri_detail.updated_by')
+        $recent = SelfEvaluationDetail::query()
+            ->leftJoin('user_roles as ur', 'ur.id', '=', 'self_evaluation_details.updated_by')
             ->leftJoin('users as u', 'u.cis_user_id', '=', 'ur.cis_user_id')
-            ->whereIn('form_evaluasi_diri_detail.form_evaluasi_diri_id', $formsActiveTA->pluck('id'))
-            ->orderByDesc('form_evaluasi_diri_detail.updated_at')
+            ->whereIn('self_evaluation_details.self_evaluation_form_id', $formsActiveTA->pluck('id'))
+            ->orderByDesc('self_evaluation_details.updated_at')
             ->limit(10)
             ->get([
-                'form_evaluasi_diri_detail.*',
+                'self_evaluation_details.*',
                 DB::raw('u.name as updater_name'),
                 DB::raw('u.username as updater_username'),
             ]);
@@ -102,20 +105,20 @@ class DashboardController extends Controller
         $indicatorMap = AmiStandardIndicator::query()
             ->with(['standard:id,name'])
             ->whereIn('id', $detailsActiveTA->pluck('ami_standard_indicator_id')->filter()->unique())
-            ->get(['id','standard_id','description'])
+            ->get(['id', 'standard_id', 'description'])
             ->keyBy('id');
 
         // Statistik ketercapaian
         $statsK = [
-            'Melampaui'      => 0,
-            'Mencapai'       => 0,
+            'Melampaui' => 0,
+            'Mencapai' => 0,
             'Tidak Mencapai' => 0,
-            'Menyimpang'     => 0,
-            'Kosong'         => 0,
+            'Menyimpang' => 0,
+            'Kosong' => 0,
         ];
-        $kMap = KetercapaianStandard::pluck('name', 'id');
+        $kMap = StandardAchievement::pluck('name', 'id');
         foreach ($detailsActiveTA as $d) {
-            $name = $d->ketercapaian_standard_id ? ($kMap[$d->ketercapaian_standard_id] ?? 'Kosong') : 'Kosong';
+            $name = $d->standard_achievement_id ? ($kMap[$d->standard_achievement_id] ?? 'Kosong') : 'Kosong';
             $statsK[$name] = ($statsK[$name] ?? 0) + 1;
         }
 

@@ -55,89 +55,116 @@
   @endif
 
   <div class="card">
-    <div class="card-header">
-      <h5 class="mb-0">Daftar Konfigurasi Akademik</h5>
-      <div class="d-flex align-items-center">
-        <div class="ms-auto">
-          <input type="text" class="form-control" placeholder="Cari konfigurasi..." id="searchAcademicConfig">
-        </div>
+    <div class="card-header d-flex align-items-center justify-content-between">
+      <h5 class="mb-0">Konfigurasi Tahun Akademik</h5>
+
+      <div class="d-flex gap-2">
+        <form method="GET" action="{{ route('admin.academic_config.index') }}">
+          <div class="dropdown">
+            <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown">
+              {{ request('per_page', 10) }}/hal
+            </button>
+            <ul class="dropdown-menu">
+              @foreach([10,25,50,100] as $pp)
+                <li>
+                  <button type="submit" name="per_page" value="{{ $pp }}" class="dropdown-item">
+                    {{ $pp }} per halaman
+                  </button>
+                </li>
+              @endforeach
+            </ul>
+          </div>
+        </form>
       </div>
     </div>
 
     <div class="table-responsive">
-      <table class="table text-nowrap table-hover">
+      <table class="table table-hover">
         <thead class="table-light">
           <tr>
-            <th style="width:50px" class="text-center">No</th>
+            <th class="text-center" style="width: 50px;">No</th>
+            <th>Kode TA</th>
             <th>Nama</th>
-            <th>Kode Akademik</th>
-            <th style="width:120px" class="text-center">Status</th>
-            <th style="width:200px" class="text-center">Aksi</th>
+            <th class="text-center" style="width: 100px;">Status</th>
+            <th class="text-center" style="width: 150px;">Aksi</th>
           </tr>
         </thead>
         <tbody>
-        @forelse($academicConfigs as $config)
-          <tr>
-            <td class="text-center">{{ $loop->iteration }}</td>
-            <td>{{ $config->name }}</td>
-            <td>{{ $config->academic_code }}</td>
-            <td class="text-center">
-              @if($config->active)
-                <span class="badge bg-success">Aktif</span>
-              @else
-                <span class="badge bg-secondary">Tidak Aktif</span>
-              @endif
-            </td>
-            <td class="text-center">
-              <div class="d-flex justify-content-center gap-2">
+          @forelse($academicConfigs as $config)
+            <tr>
+              <td class="text-center">{{ $academicConfigs->firstItem() + $loop->index }}</td>
+              <td><code>{{ $config->academic_code }}</code></td>
+              <td>{{ $config->name }}</td>
+              <td class="text-center">
+                @if($config->active)
+                  <span class="badge bg-success">Aktif</span>
+                @else
+                  <span class="badge bg-secondary">Tidak Aktif</span>
+                @endif
+              </td>
+              <td class="text-center">
+                <div class="d-flex justify-content-center gap-2">
 
-                {{-- Toggle Active (dengan SweetAlert2 confirm) --}}
-                <form method="POST"
-                      action="{{ route('admin.academic_config.set_active', $config->id) }}"
-                      id="formToggleActive-{{ $config->id }}">
-                  @csrf
-                  <input type="hidden" name="active" value="{{ $config->active ? 0 : 1 }}">
-                  <button type="button"
-                          class="btn btn-{{ $config->active ? 'secondary' : 'success' }} btn-icon"
-                          title="{{ $config->active ? 'Nonaktifkan' : 'Aktifkan' }}"
-                          onclick="confirmToggleActive('formToggleActive-{{ $config->id }}', {{ $config->active ? 'false' : 'true' }})">
-                    @if($config->active)
-                      <i class="ph-x-circle"></i>
-                    @else
-                      <i class="ph-check-circle"></i>
-                    @endif
+                  {{-- Toggle Active (dengan SweetAlert2 confirm) --}}
+                  <form method="POST"
+                        action="{{ route('admin.academic_config.set_active', $config->id) }}"
+                        id="formToggleActive-{{ $config->id }}">
+                    @csrf
+                    <input type="hidden" name="active" value="{{ $config->active ? 0 : 1 }}">
+                    <button type="button"
+                            class="btn btn-{{ $config->active ? 'secondary' : 'success' }} btn-icon"
+                            title="{{ $config->active ? 'Nonaktifkan' : 'Aktifkan' }}"
+                            onclick="confirmToggleActive('formToggleActive-{{ $config->id }}', {{ $config->active ? 'false' : 'true' }})">
+                      @if($config->active)
+                        <i class="ph-x-circle"></i>
+                      @else
+                        <i class="ph-check-circle"></i>
+                      @endif
+                    </button>
+                  </form>
+
+                  {{-- Edit --}}
+                  <button type="button" class="btn btn-warning btn-icon" title="Edit"
+                          onclick="openEditConfigModal('{{ $config->id }}','{{ e($config->name) }}','{{ e($config->academic_code) }}','{{ route('admin.academic_config.update', $config->id) }}')">
+                    <i class="ph-pencil"></i>
                   </button>
-                </form>
 
-                {{-- Edit --}}
-                <button type="button" class="btn btn-warning btn-icon" title="Edit"
-                        onclick="openEditConfigModal('{{ $config->id }}','{{ e($config->name) }}','{{ e($config->academic_code) }}','{{ route('admin.academic_config.update', $config->id) }}')">
-                  <i class="ph-pencil"></i>
-                </button>
+                  {{-- Delete (dengan SweetAlert2 confirm) --}}
+                  <form method="POST"
+                        action="{{ route('admin.academic_config.destroy', $config->id) }}"
+                        id="formDelete-{{ $config->id }}">
+                    @csrf
+                    @method('DELETE')
+                    <button type="button" class="btn btn-danger btn-icon" title="Hapus"
+                            onclick="confirmDelete('formDelete-{{ $config->id }}')">
+                      <i class="ph-trash"></i>
+                    </button>
+                  </form>
 
-                {{-- Delete (dengan SweetAlert2 confirm) --}}
-                <form method="POST"
-                      action="{{ route('admin.academic_config.destroy', $config->id) }}"
-                      id="formDelete-{{ $config->id }}">
-                  @csrf
-                  @method('DELETE')
-                  <button type="button" class="btn btn-danger btn-icon" title="Hapus"
-                          onclick="confirmDelete('formDelete-{{ $config->id }}')">
-                    <i class="ph-trash"></i>
-                  </button>
-                </form>
-
-              </div>
-            </td>
-          </tr>
-        @empty
-          <tr>
-            <td colspan="5" class="text-center text-muted">Belum ada data konfigurasi akademik</td>
-          </tr>
-        @endforelse
+                </div>
+              </td>
+            </tr>
+          @empty
+            <tr><td colspan="5" class="text-center text-muted">Belum ada data</td></tr>
+          @endforelse
         </tbody>
       </table>
     </div>
+
+    @if($academicConfigs->hasPages())
+      <div class="card-footer d-flex align-items-center">
+        <span class="text-muted me-auto">
+          Menampilkan {{ $academicConfigs->firstItem() }}–{{ $academicConfigs->lastItem() }} dari {{ $academicConfigs->total() }} entri
+        </span>
+        <div>
+          {{ $academicConfigs->onEachSide(1)->links() }}
+        </div>
+      </div>
+    @else
+      <div class="card-footer">
+        <span class="text-muted">Total {{ $academicConfigs->total() }} entri</span>
+      </div>
+    @endif
   </div>
 </div>
 

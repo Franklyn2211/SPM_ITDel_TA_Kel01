@@ -15,15 +15,15 @@ class AmiIndicatorController extends Controller
     public function index(Request $request)
     {
         $standardId = $request->query('standard_id');
-        $roleId     = $request->query('role_id');
-        $perPage    = (int) $request->query('per_page', 10);
+        $roleId = $request->query('role_id');
+        $perPage = (int) $request->query('per_page', 10);
         if (!in_array($perPage, [10, 25, 50, 100], true)) {
             $perPage = 10;
         }
 
         // Listing indikator:
-        // - Kalau tidak filter by standard_id: batasi hanya standar yang TA-nya aktif.
-        // - Kalau filter by standard_id: tetap tampilkan yang itu, tapi kalau standar-nya TA nonaktif ya hasilnya kosong (sesuai “harusnya begitu”).
+        // - Kalau tidak filter by standard_id: hanya indikator milik standar yang TA aktif + standar aktif (untuk yang "live").
+        // - Kalau filter by standard_id: tampilkan semua indikator standar itu (meskipun standar masih draft), supaya admin bisa edit.
         $rows = AmiStandardIndicator::query()
             ->with([
                 'standard:id,name,academic_config_id,active',
@@ -33,13 +33,15 @@ class AmiIndicatorController extends Controller
             ->when($standardId, function ($q) use ($standardId) {
                 $q->where('standard_id', $standardId);
             }, function ($q) {
-                // Tanpa filter: hanya indikator milik standar yang TA aktif + standar aktif
+                // Tanpa filter standard_id: tampilkan semua indikator dari standar di TA aktif
+                // (boleh draft maupun aktif). Jadi tidak lagi membatasi standar.active = true.
                 $q->whereHas('standard', function ($qs) {
-                    $qs->where('active', true)
-                       ->whereHas('academicConfig', fn($qa) => $qa->where('active', true));
+                    $qs->whereHas('academicConfig', fn($qa) => $qa->where('active', true));
                 });
             })
-            ->when($roleId, fn ($q) =>
+            ->when(
+                $roleId,
+                fn($q) =>
                 $q->whereHas('pics', fn($qq) => $qq->where('role_id', $roleId))
             )
             ->orderBy('standard_id')
@@ -47,11 +49,12 @@ class AmiIndicatorController extends Controller
             ->paginate($perPage)
             ->withQueryString();
 
-        // Dropdown standar (TA aktif saja)
+        // Dropdown standar:
+        // sekarang: SEMUA standar di TA aktif (baik draft maupun aktif),
+        // supaya admin bisa isi indikator dulu baru submit standar.
         $standards = AmiStandard::query()
             ->with('academicConfig:id,academic_code,active')
-            ->where('active', true)
-            ->whereHas('academicConfig', fn ($q) => $q->where('active', true))
+            ->whereHas('academicConfig', fn($q) => $q->where('active', true))
             ->orderBy('name')
             ->get(['id', 'name', 'academic_config_id', 'active']);
 
@@ -77,43 +80,49 @@ class AmiIndicatorController extends Controller
         $data = $request->validate([
             'description' => ['required', 'string'],
             'standard_id' => ['required', 'exists:ami_standards,id'],
-            'role_ids'    => ['required', 'array', 'min:1'],
-            'role_ids.*'  => ['exists:roles,id'],
+            'role_ids' => ['required', 'array', 'min:1'],
+            'role_ids.*' => ['exists:roles,id'],
+            'positive_result_template' => ['nullable', 'string'],
+            'negative_result_template' => ['nullable', 'string'],
         ]);
 
-        // Standar wajib TA aktif
+        // Standar wajib TA aktif, tapi boleh draft maupun aktif
         $std = AmiStandard::with('academicConfig:id,active')->findOrFail($data['standard_id']);
-        if (!$std->active || !$std->academicConfig || !$std->academicConfig->active) {
+        if (!$std->academicConfig || !$std->academicConfig->active) {
             return redirect()->route('admin.ami.indicator')
                 ->with('error', 'Standar yang dipilih tidak berada pada Tahun Akademik aktif.');
         }
 
         DB::transaction(function () use ($data) {
             $indicator = new AmiStandardIndicator([
-                'id'          => AmiStandardIndicator::generateNextId(),
+                'id' => AmiStandardIndicator::generateNextId(),
                 'description' => $data['description'],
                 'standard_id' => $data['standard_id'],
-                'active'      => true,
+                'positive_result_template' => $data['positive_result_template'] ?? null,
+                'negative_result_template' => $data['negative_result_template'] ?? null,
+                'active' => true,
             ]);
             $indicator->save();
 
             $roleIds = collect($data['role_ids'])
-                ->map(fn ($id) => (string) $id)
+                ->map(fn($id) => (string) $id)
                 ->filter()
                 ->unique()
                 ->values();
 
             foreach ($roleIds as $rid) {
                 AmiStandardIndicatorPic::create([
-                    'id'                     => AmiStandardIndicatorPic::generateNextId(),
-                    'standard_indicator_id'  => $indicator->id,
-                    'role_id'                => $rid,
-                    'active'                 => true,
+                    'id' => AmiStandardIndicatorPic::generateNextId(),
+                    'standard_indicator_id' => $indicator->id,
+                    'role_id' => $rid,
+                    'active' => true,
                 ]);
             }
         });
 
-        return redirect()->route('admin.ami.indicator')->with('success', 'Indikator berhasil dibuat.');
+        // Redirect kembali ke standar yang sama agar konteks tidak hilang
+        return redirect()->route('admin.ami.indicator', ['standard_id' => $data['standard_id']])
+            ->with('success', 'Indikator berhasil dibuat.');
     }
 
     public function update(Request $request, AmiStandardIndicator $amiIndicator)
@@ -121,13 +130,15 @@ class AmiIndicatorController extends Controller
         $data = $request->validate([
             'description' => ['required', 'string'],
             'standard_id' => ['required', 'exists:ami_standards,id'],
-            'role_ids'    => ['nullable', 'array'],
-            'role_ids.*'  => ['exists:roles,id'],
+            'role_ids' => ['nullable', 'array'],
+            'role_ids.*' => ['exists:roles,id'],
+            'positive_result_template' => ['nullable', 'string'],
+            'negative_result_template' => ['nullable', 'string'],
         ]);
 
-        // Standar wajib TA aktif
+        // Standar wajib TA aktif, tapi boleh draft maupun aktif
         $std = AmiStandard::with('academicConfig:id,active')->findOrFail($data['standard_id']);
-        if (!$std->active || !$std->academicConfig || !$std->academicConfig->active) {
+        if (!$std->academicConfig || !$std->academicConfig->active) {
             return redirect()->route('admin.ami.indicator')
                 ->with('error', 'Standar yang dipilih tidak berada pada Tahun Akademik aktif.');
         }
@@ -136,11 +147,13 @@ class AmiIndicatorController extends Controller
             $amiIndicator->update([
                 'description' => $data['description'],
                 'standard_id' => $data['standard_id'],
-                'active'      => true,
+                'positive_result_template' => $data['positive_result_template'] ?? null,
+                'negative_result_template' => $data['negative_result_template'] ?? null,
+                'active' => true,
             ]);
 
             $roleIds = collect($data['role_ids'] ?? [])
-                ->map(fn ($id) => (string) $id)
+                ->map(fn($id) => (string) $id)
                 ->filter()
                 ->unique()
                 ->values();
@@ -157,23 +170,25 @@ class AmiIndicatorController extends Controller
             foreach ($roleIds as $rid) {
                 $existing = AmiStandardIndicatorPic::where([
                     'standard_indicator_id' => $amiIndicator->id,
-                    'role_id'               => $rid,
+                    'role_id' => $rid,
                 ])->first();
 
                 if ($existing) {
                     $existing->update(['active' => true]);
                 } else {
                     AmiStandardIndicatorPic::create([
-                        'id'                     => AmiStandardIndicatorPic::generateNextId(),
-                        'standard_indicator_id'  => $amiIndicator->id,
-                        'role_id'                => $rid,
-                        'active'                 => true,
+                        'id' => AmiStandardIndicatorPic::generateNextId(),
+                        'standard_indicator_id' => $amiIndicator->id,
+                        'role_id' => $rid,
+                        'active' => true,
                     ]);
                 }
             }
         });
 
-        return redirect()->route('admin.ami.indicator')->with('success', 'Indikator berhasil diperbarui.');
+        // Tetap di standar yang sedang diedit (bisa berubah jika standard_id di-update)
+        return redirect()->route('admin.ami.indicator', ['standard_id' => $data['standard_id']])
+            ->with('success', 'Indikator berhasil diperbarui.');
     }
 
     public function destroy($id)
@@ -185,6 +200,9 @@ class AmiIndicatorController extends Controller
             $amiIndicator->delete();
         });
 
-        return redirect()->route('admin.ami.indicator')->with('success', 'Indikator berhasil dihapus.');
+        // Ambil standard_id sebelum dihapus agar tetap di halaman filter yang sama
+        $standardId = $amiIndicator->standard_id;
+        return redirect()->route('admin.ami.indicator', ['standard_id' => $standardId])
+            ->with('success', 'Indikator berhasil dihapus.');
     }
 }

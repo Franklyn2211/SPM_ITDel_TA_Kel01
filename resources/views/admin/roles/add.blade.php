@@ -53,6 +53,7 @@
       <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
     </div>
   @endif
+
   @if (session('success'))
     <div class="alert alert-success border-0 alert-dismissible fade show">
       <div class="d-flex align-items-center">
@@ -84,7 +85,8 @@
         <tbody>
           @forelse($roles as $role)
           <tr>
-            <td class="text-center">{{ $loop->iteration }}</td>
+            {{-- Nomor global mengikuti pagination --}}
+            <td class="text-center">{{ $roles->firstItem() + $loop->index }}</td>
             <td>{{ $role->name }}</td>
             <td>{{ $role->category->name ?? '-' }}</td>
             <td class="text-center">
@@ -120,6 +122,17 @@
         </tbody>
       </table>
     </div>
+
+    @if($roles instanceof \Illuminate\Pagination\LengthAwarePaginator && $roles->hasPages())
+    <div class="card-footer d-flex align-items-center">
+      <span class="text-muted me-auto">
+        Showing {{ $roles->firstItem() }} to {{ $roles->lastItem() }} of {{ $roles->total() }} entries
+      </span>
+      <div>
+        {{ $roles->onEachSide(1)->links('pagination::bootstrap-5') }}
+      </div>
+    </div>
+    @endif
   </div>
 </div>
 
@@ -243,9 +256,11 @@
     }).then((r) => {
       if (r.isConfirmed) {
         const f = document.createElement('form');
-        f.method = 'POST'; f.action = url;
+        f.method = 'POST';
+        f.action = url;
         f.innerHTML = `@csrf @method('DELETE')`;
-        document.body.appendChild(f); f.submit();
+        document.body.appendChild(f);
+        f.submit();
       }
     });
   }

@@ -11,7 +11,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('ref_status_evaluasi', function (Blueprint $table) {
+        Schema::create('ref_evaluation_status', function (Blueprint $table) {
             $table->string('id')->primary();
             $table->string('name');
             $table->string('created_by')->nullable();
@@ -30,6 +30,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('ref_status_evaluasi');
+        Schema::dropIfExists('ref_evaluation_status');
     }
 };

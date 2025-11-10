@@ -2,7 +2,6 @@
 
 @section('title', 'Dashboard - Sistem Penjaminan Mutu')
 
-{{-- Page Header --}}
 @section('page-header')
 <div class="page-header page-header-light shadow">
   <div class="page-header-content d-lg-flex">
@@ -52,7 +51,6 @@
 <div class="row">
   <div class="col-xl-8">
 
-    {{-- ====== KARTU STATUS & AKSI CEPAT FED ====== --}}
     <div class="card">
       <div class="card-header d-flex align-items-center">
         <h5 class="mb-0">
@@ -80,7 +78,6 @@
             Tahun akademik aktif belum diset. Silakan hubungi admin.
           </div>
         @else
-          {{-- Progress bar + angka --}}
           @if($form)
             <div class="d-flex align-items-center mb-3">
               <div class="me-3">
@@ -94,13 +91,12 @@
               </div>
             </div>
 
-            {{-- Info submit / reminder --}}
             @if(($form->status->name ?? '') === 'Dikirim')
               <div class="alert alert-success py-2">
                 <i class="ph-check-circle me-2"></i>
                 Form telah <strong>dikirim</strong>
-                @if($form->tanggal_submit)
-                  pada {{ \Illuminate\Support\Carbon::parse($form->tanggal_submit)->translatedFormat('d M Y') }}
+                @if($form->submitted_at)
+                  pada {{ \Illuminate\Support\Carbon::parse($form->submitted_at)->translatedFormat('d M Y') }}
                 @endif
                 .
               </div>
@@ -117,7 +113,6 @@
             </div>
           @endif
 
-          {{-- Tombol aksi cepat --}}
           <div class="d-flex flex-wrap gap-2 mt-2">
             <a href="{{ route('auditee.fed.index') }}" class="btn btn-primary">
               <i class="ph-note-pencil me-2"></i> Buka Pengisian FED
@@ -134,7 +129,6 @@
             @endif
           </div>
 
-          {{-- Meta kecil --}}
           @if($form && $lastUpdatedAt)
             <div class="text-muted fs-sm mt-2">
               Terakhir diperbarui: {{ \Illuminate\Support\Carbon::parse($lastUpdatedAt)->diffForHumans() }}
@@ -143,9 +137,7 @@
         @endif
       </div>
     </div>
-    {{-- ====== END KARTU FED ====== --}}
 
-    {{-- ====== ITEM YANG BELUM DIISI ====== --}}
     <div class="card">
       <div class="card-header d-flex align-items-center">
         <h5 class="mb-0">Butir Belum Diisi</h5>
@@ -170,8 +162,8 @@
             @else
               @forelse($unfilled as $i => $d)
                 @php
-                  $stdName   = optional($d->AmiStandardIndicator?->standard)->name ?? '-';
-                  $descPlain = strip_tags($d->AmiStandardIndicator->description ?? '');
+                  $stdName   = optional($d->indicator?->standard)->name ?? '-';
+                  $descPlain = strip_tags($d->indicator->description ?? '');
                   $shortDesc = \Illuminate\Support\Str::limit($descPlain, 140);
                 @endphp
                 <tr id="unfilled-{{ $d->id }}">
@@ -199,9 +191,7 @@
         </table>
       </div>
     </div>
-    {{-- ====== END ITEM BELUM DIISI ====== --}}
 
-    {{-- ====== AKTIVITAS TERAKHIR ====== --}}
     <div class="card">
       <div class="card-header d-flex align-items-center">
         <h5 class="mb-0">Aktivitas Terakhir</h5>
@@ -223,11 +213,11 @@
             @else
               @forelse($recent as $i => $d)
                 @php
-                  $stdName   = optional($d->AmiStandardIndicator?->standard)->name ?? '-';
-                  $descPlain = strip_tags($d->AmiStandardIndicator->description ?? '');
+                  $stdName   = optional($d->indicator?->standard)->name ?? '-';
+                  $descPlain = strip_tags($d->indicator->description ?? '');
                   $shortDesc = \Illuminate\Support\Str::limit($descPlain, 120);
-                  $k         = $d->KetercapaianStandard->name ?? '—';
-                  $hasil     = trim((string)($d->hasil ?? ''));
+                  $k         = $d->standardAchievement->name ?? '—';
+                  $hasil     = trim((string)($d->result ?? ''));
                 @endphp
                 <tr id="recent-{{ $d->id }}">
                   <td>{{ $i+1 }}</td>
@@ -260,14 +250,10 @@
         </table>
       </div>
     </div>
-    {{-- ====== END AKTIVITAS TERAKHIR ====== --}}
 
   </div>
 
-  {{-- ====== KOLOM KANAN: STATISTIK & NAVIGASI ====== --}}
   <div class="col-xl-4">
-
-    {{-- Statistik ringkas ketercapaian --}}
     <div class="card">
       <div class="card-header d-flex align-items-center">
         <h5 class="mb-0">Statistik Ketercapaian</h5>
@@ -302,7 +288,6 @@
       </div>
     </div>
 
-    {{-- Navigasi cepat --}}
     <div class="card">
       <div class="card-header d-flex align-items-center">
         <h5 class="mb-0">Navigasi Cepat</h5>
@@ -312,7 +297,6 @@
           <i class="ph-note-pencil me-2"></i> Pengisian FED
           <span class="ms-auto text-muted">&rarr;</span>
         </a>
-        {{-- Tambah link lain jika ada modul lain --}}
         <a href="#" class="list-group-item list-group-item-action d-flex align-items-center disabled">
           <i class="ph-file-pdf me-2"></i> Cetak Laporan (segera)
         </a>
@@ -327,11 +311,9 @@
 @endsection
 
 @push('styles')
-<style>
-  .letter-icon { width: 18px; height: 18px; display:block; }
-</style>
+<style>.letter-icon { width: 18px; height: 18px; display:block; }</style>
 @endpush
 
 @push('scripts')
-{{-- Script khusus halaman jika diperlukan --}}
+{{-- no extra scripts here --}}
 @endpush

@@ -84,7 +84,7 @@
         <tbody>
           @forelse($categoryDetails as $detail)
           <tr>
-            <td class="text-center">{{ $loop->iteration }}</td>
+            <td class="text-center">{{ $categoryDetails->firstItem() + $loop->index }}</td>
             <td>{{ $detail->category->name }}</td>
             <td>{{ $detail->name }}</td>
             <td class="text-center">
@@ -114,6 +114,14 @@
           @endforelse
         </tbody>
       </table>
+    </div>
+
+    {{-- Pagination --}}
+    <div class="card-footer d-flex justify-content-between align-items-center">
+      <span class="text-muted">
+        Menampilkan {{ $categoryDetails->firstItem() ?? 0 }} - {{ $categoryDetails->lastItem() ?? 0 }} dari {{ $categoryDetails->total() }} data
+      </span>
+      {{ $categoryDetails->links() }}
     </div>
   </div>
 </div>

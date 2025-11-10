@@ -37,26 +37,13 @@ class RefCategory extends Model
     public function updatedBy() { return $this->belongsTo(User::class, 'updated_by'); }
     public function details()   { return $this->hasMany(RefCategoryDetail::class, 'category_id', 'id'); }
 
-    public static function generateNextId()
+    public static function generateNextId(): string
     {
-       // Ambil nomor terbesar berdasarkan angka setelah prefix "ASI"
-        $maxNum = (int) self::where('id', 'like', 'C%')
-            ->selectRaw("MAX(CAST(SUBSTRING(id, 4) AS UNSIGNED)) as maxnum")
-            ->value('maxnum');
-
-        // Increment the number by 1
-        $nextNumber = $maxNum + 1;
-
-        // Check if the next number already exists
-        $nextId = 'C' . str_pad((string)$nextNumber, 3, '0', STR_PAD_LEFT);
-
-        // If the ID already exists, recursively call the method until we get a unique one
-        if (self::where('id', $nextId)->exists()) {
-            return self::generateNextId(); // Recursive call until a unique ID is generated
-        }
-
-        // Return the unique ID
-        return $nextId;
+        $max = (int) static::where('id','like','C%')
+            ->selectRaw("MAX(CAST(SUBSTRING(id,3) AS UNSIGNED)) as m")
+            ->value('m');
+        $next = 'C'.str_pad((string)($max+1),3,'0',STR_PAD_LEFT);
+        return static::where('id',$next)->exists() ? static::generateNextId() : $next;
     }
 
 }

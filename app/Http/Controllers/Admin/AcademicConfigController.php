@@ -14,8 +14,8 @@ class AcademicConfigController extends Controller
     public function index()
     {
         $academicConfigs = AcademicConfig::orderByDesc('active')
-            ->orderBy('academic_code')
-            ->get();
+            ->orderByDesc('created_at')
+            ->paginate(10);
 
         return view('admin.academic_config.index', compact('academicConfigs'));
     }
@@ -23,8 +23,8 @@ class AcademicConfigController extends Controller
     public function store(Request $request)
     {
         $validator = \Validator::make($request->all(), [
-            'academic_code' => ['required','string','max:100','unique:academic_configs,academic_code'],
-            'name'          => ['required','string','max:255'],
+            'academic_code' => ['required', 'string', 'max:100', 'unique:academic_configs,academic_code'],
+            'name' => ['required', 'string', 'max:255'],
         ], [
             'academic_code.unique' => 'Kode akademik tersebut sudah ada.',
         ]);
@@ -43,16 +43,16 @@ class AcademicConfigController extends Controller
 
                 // Buat yang baru dan aktifkan
                 $ac = new AcademicConfig([
-                    'id'            => AcademicConfig::generateNextId(),
+                    'id' => AcademicConfig::generateNextId(),
                     'academic_code' => $request->input('academic_code'),
-                    'name'          => $request->input('name'),
-                    'active'        => true,
+                    'name' => $request->input('name'),
+                    'active' => true,
                 ]);
 
                 $ac->save();
             });
         } catch (QueryException $e) {
-            if ((string)$e->getCode() === '23000') {
+            if ((string) $e->getCode() === '23000') {
                 return back()
                     ->withInput()
                     ->with('toast_error', 'Gagal menyimpan. Data dengan kode akademik ini sudah ada.');
@@ -69,10 +69,12 @@ class AcademicConfigController extends Controller
     {
         $validator = \Validator::make($request->all(), [
             'academic_code' => [
-                'required','string','max:100',
-                Rule::unique('academic_configs','academic_code')->ignore($academicConfig->id, 'id'),
+                'required',
+                'string',
+                'max:100',
+                Rule::unique('academic_configs', 'academic_code')->ignore($academicConfig->id, 'id'),
             ],
-            'name' => ['required','string','max:255'],
+            'name' => ['required', 'string', 'max:255'],
         ], [
             'academic_code.unique' => 'Kode akademik sudah digunakan oleh konfigurasi lain.',
         ]);
@@ -86,7 +88,7 @@ class AcademicConfigController extends Controller
 
         $academicConfig->update([
             'academic_code' => $request->string('academic_code'),
-            'name'          => $request->string('name'),
+            'name' => $request->string('name'),
         ]);
 
         return redirect()

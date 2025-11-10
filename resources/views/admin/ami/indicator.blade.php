@@ -53,6 +53,16 @@
     </div>
   @endif
 
+  @if (session('error'))
+    <div class="alert alert-danger border-0 alert-dismissible fade show">
+      <div class="d-flex align-items-center">
+        <i class="ph-warning me-2"></i>
+        {{ session('error') }}
+      </div>
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+  @endif
+
   @if ($errors->any())
     <div class="alert alert-danger border-0 alert-dismissible fade show">
       <div class="d-flex align-items-center">
@@ -96,6 +106,7 @@
                 @foreach($standards as $s)
                   <option value="{{ $s->id }}" {{ (string)$selectedStandardId === (string)$s->id ? 'selected' : '' }}>
                     {{ $s->name }}@if(optional($s->academicConfig)->academic_code) (TA {{ $s->academicConfig->academic_code }})@endif
+                    @if(!$s->active) [Draft] @endif
                   </option>
                 @endforeach
               </select>
@@ -140,7 +151,14 @@
           </form>
         </div>
 
-
+        {{-- SEARCH --}}
+        <div class="ms-auto" style="max-width: 320px;">
+          <div class="input-group input-group-sm">
+            <span class="input-group-text"><i class="ph-magnifying-glass"></i></span>
+            <input type="text" id="searchIndicator" class="form-control" placeholder="Cari standar / indikator / PIC...">
+            <button class="btn btn-outline-secondary" type="button" id="btnResetFilterI">Reset</button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -160,16 +178,28 @@
         <tbody>
 @forelse($rows as $row)
   @php
-    $desc = $row->description ?? '';
-    $descPlain = strip_tags($desc);
-    $descB64 = base64_encode($desc);
-    $ta = optional($row->standard?->academicConfig)->academic_code;
+    $desc        = $row->description ?? '';
+    $descPlain   = strip_tags($desc);
+    $descB64     = base64_encode($desc);
+    $ta          = optional($row->standard?->academicConfig)->academic_code;
+
+    $posTpl      = $row->positive_result_template ?? '';
+    $negTpl      = $row->negative_result_template ?? '';
+    $posTplPlain = strip_tags($posTpl);
+    $negTplPlain = strip_tags($negTpl);
+    $posTplB64   = base64_encode($posTpl);
+    $negTplB64   = base64_encode($negTpl);
   @endphp
   <tr>
     <td class="text-center align-top">{{ $rows->firstItem() + $loop->index }}</td>
 
     <td class="align-top td-std">
-      <div class="fw-semibold">{{ $row->standard->name ?? '-' }}</div>
+      <div class="fw-semibold">
+        {{ $row->standard->name ?? '-' }}
+        @if(optional($row->standard)->active === false)
+          <span class="badge bg-secondary ms-1">Draft</span>
+        @endif
+      </div>
       <span class="d-none td-desc">{{ $descPlain }}</span>
       <span class="d-none td-pic">
         @if(($row->pics ?? collect())->count())
@@ -221,6 +251,8 @@
           data-bs-target="#modalEdit"
           data-update="{{ route('admin.ami.indicator.update', $row->id) }}"
           data-desc-html="{{ $descB64 }}"
+          data-positive-template="{{ $posTplB64 }}"
+          data-negative-template="{{ $negTplB64 }}"
           data-standard="{{ $row->standard_id }}"
           data-roles='@json(($row->pics ?? collect())->pluck("role_id")->values())'>
           <i class="ph-pencil"></i>
@@ -289,6 +321,7 @@
                   @if(optional($s->academicConfig)->academic_code)
                     (TA {{ $s->academicConfig->academic_code }})
                   @endif
+                  @if(!$s->active) [Draft] @endif
                 </option>
               @endforeach
             </select>
@@ -298,7 +331,36 @@
 
         <div class="mb-3">
           <label class="form-label">Deskripsi Indikator</label>
-          <textarea name="description" id="create_description" class="form-control summernote" rows="6" required placeholder="Tulis deskripsi indikator..."></textarea>
+          <textarea name="description"
+                    id="create_description"
+                    class="form-control summernote"
+                    rows="6"
+                    required
+                    placeholder="Tulis deskripsi indikator...">{{ old('description') }}</textarea>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">Template Hasil Positif</label>
+          <textarea name="positive_result_template"
+                    id="create_positive_result_template"
+                    class="form-control summernote"
+                    rows="4"
+                    placeholder="Contoh narasi ketika standar tercapai / melampaui...">{{ old('positive_result_template') }}</textarea>
+          <div class="form-text">
+            Opsional. Akan membantu auditee saat mengisi hasil pelaksanaan jika standar tercapai.
+          </div>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">Template Hasil Negatif</label>
+          <textarea name="negative_result_template"
+                    id="create_negative_result_template"
+                    class="form-control summernote"
+                    rows="4"
+                    placeholder="Contoh narasi ketika standar tidak tercapai...">{{ old('negative_result_template') }}</textarea>
+          <div class="form-text">
+            Opsional. Bisa dipakai sebagai contoh narasi bila indikator belum terpenuhi.
+          </div>
         </div>
 
         <div class="mb-3">
@@ -340,6 +402,7 @@
                 @if(optional($s->academicConfig)->academic_code)
                   (TA {{ $s->academicConfig->academic_code }})
                 @endif
+                @if(!$s->active) [Draft] @endif
               </option>
             @endforeach
           </select>
@@ -347,7 +410,27 @@
 
         <div class="mb-3">
           <label class="form-label">Deskripsi Indikator</label>
-          <textarea name="description" id="edit_description" class="form-control summernote" rows="6" required></textarea>
+          <textarea name="description"
+                    id="edit_description"
+                    class="form-control summernote"
+                    rows="6"
+                    required></textarea>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">Template Hasil Positif</label>
+          <textarea name="positive_result_template"
+                    id="edit_positive_result_template"
+                    class="form-control summernote"
+                    rows="4"></textarea>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">Template Hasil Negatif</label>
+          <textarea name="negative_result_template"
+                    id="edit_negative_result_template"
+                    class="form-control summernote"
+                    rows="4"></textarea>
         </div>
 
         <div class="mb-3">
@@ -390,11 +473,19 @@
 @push('styles')
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/summernote@0.8.20/dist/summernote-lite.min.css">
   <style>
-    /* Biar header makin rapih */
     .card-header .form-select,
     .card-header .form-control { min-height: 34px; }
     .card-header .btn { --bs-btn-padding-y: .25rem; --bs-btn-padding-x: .6rem; }
     .vr { height: 24px; }
+
+    .note-editor.note-frame { border: 1px solid #ddd; }
+    .note-editing-area { min-height: 150px; }
+
+    #modalCreate .modal-body,
+    #modalEdit .modal-body {
+      max-height: calc(100vh - 200px);
+      overflow-y: auto;
+    }
   </style>
 @endpush
 
@@ -403,21 +494,50 @@
   <script src="https://cdn.jsdelivr.net/npm/summernote@0.8.20/dist/summernote-lite.min.js"></script>
 
   <script>
+  const AlphaListButton = function (context) {
+    const ui = $.summernote.ui;
+
+    const button = ui.button({
+      contents: '<i class="note-icon-unorderedlist"></i> a.',
+      tooltip: 'Insert alphabetic list (a., b., c.)',
+      click: function () {
+        const template = '<ol type="a"><li></li></ol><p></p>';
+        context.invoke('editor.pasteHTML', template);
+      }
+    });
+
+    return button.render();
+  };
+
   (function () {
     function initEditors() {
       const $editors = $('.summernote');
-      if ($editors.data('summernote')) return;
+      if ($editors.length && $editors.first().data('summernote')) return;
+
       $editors.summernote({
-        placeholder: 'Tulis deskripsi indikator...',
-        height: 260,
+        placeholder: 'Tulis deskripsi di sini...',
+        height: 180,
         toolbar: [
-          ['style', ['bold', 'italic', 'underline', 'clear']],
-          ['para',  ['ul', 'ol', 'paragraph']],
-          ['insert',['link']],
-          ['view',  ['codeview']]
-        ]
+          ['style', ['style']],
+          ['font', ['bold', 'italic', 'underline', 'strikethrough', 'clear']],
+          ['fontname', ['fontname']],
+          ['fontsize', ['fontsize']],
+          ['color', ['color']],
+          ['para', ['ul', 'ol', 'paragraph']],
+          ['height', ['height']],
+          ['table', ['table']],
+          ['insert', ['link', 'picture', 'video']],
+          ['custom', ['alphaList']],
+          ['view', ['fullscreen', 'codeview', 'help']]
+        ],
+        buttons: {
+          alphaList: AlphaListButton
+        },
+        dialogsInBody: true,
+        disableDragAndDrop: false
       });
     }
+
     document.addEventListener('DOMContentLoaded', initEditors);
 
     // Dropdown per page
@@ -432,6 +552,7 @@
     const table       = document.getElementById('tableIndicator');
 
     function applyFilter() {
+      if (!table || !inputFilter) return;
       const q = (inputFilter.value || '').trim().toLowerCase();
       const rows = table.querySelectorAll('tbody tr');
 
@@ -446,6 +567,7 @@
 
     inputFilter?.addEventListener('input', applyFilter);
     btnReset?.addEventListener('click', () => {
+      if (!inputFilter) return;
       inputFilter.value = '';
       applyFilter();
     });
@@ -454,36 +576,56 @@
     var modalEdit = document.getElementById('modalEdit');
     var formEdit  = document.getElementById('formEdit');
 
+    function decodeB64(b64) {
+      if (!b64) return '';
+      try { return atob(b64); } catch (e) { return ''; }
+    }
+
     modalEdit.addEventListener('show.bs.modal', function (ev) {
       initEditors();
       var btn = ev.relatedTarget;
+      if (!btn) return;
+
       formEdit.action = btn.getAttribute('data-update') || '#';
 
+      // Standard
       var std = btn.getAttribute('data-standard') || '';
       var sel = document.getElementById('edit_standard_id');
-      Array.from(sel.options).forEach(function(opt){ opt.selected = (opt.value == std); });
+      if (sel) {
+        Array.from(sel.options).forEach(function(opt){ opt.selected = (opt.value == std); });
+      }
 
-      var b64 = btn.getAttribute('data-desc-html') || '';
-      var html = '';
-      try { html = b64 ? atob(b64) : ''; } catch(e) { html = ''; }
-      $('#edit_description').summernote('code', html);
+      // Description
+      var descHtml = decodeB64(btn.getAttribute('data-desc-html') || '');
+      $('#edit_description').summernote('code', descHtml);
 
+      // Positive & negative templates
+      var posHtml = decodeB64(btn.getAttribute('data-positive-template') || '');
+      var negHtml = decodeB64(btn.getAttribute('data-negative-template') || '');
+      $('#edit_positive_result_template').summernote('code', posHtml);
+      $('#edit_negative_result_template').summernote('code', negHtml);
+
+      // Roles
       var editRoles = document.getElementById('edit_role_ids');
-      var current = [];
-      try { current = JSON.parse(btn.getAttribute('data-roles') || '[]'); } catch(e) { current = []; }
-      Array.from(editRoles.options).forEach(function(opt){
-        opt.selected = current.includes(opt.value) || current.includes(parseInt(opt.value));
-      });
+      if (editRoles) {
+        var current = [];
+        try { current = JSON.parse(btn.getAttribute('data-roles') || '[]'); } catch(e) { current = []; }
+        Array.from(editRoles.options).forEach(function(opt){
+          opt.selected = current.includes(opt.value) || current.includes(parseInt(opt.value));
+        });
+      }
     });
 
     // Modal full deskripsi
     var modalDesc = document.getElementById('modalDesc');
     var modalDescBody = document.getElementById('modalDesc_body');
-    modalDesc.addEventListener('show.bs.modal', function (ev) {
-      var btn = ev.relatedTarget;
-      var b64 = btn.getAttribute('data-desc-html') || '';
-      try { modalDescBody.innerHTML = b64 ? atob(b64) : ''; } catch(e) { modalDescBody.textContent = ''; }
-    });
+    if (modalDesc) {
+      modalDesc.addEventListener('show.bs.modal', function (ev) {
+        var btn = ev.relatedTarget;
+        var b64 = btn ? (btn.getAttribute('data-desc-html') || '') : '';
+        modalDescBody.innerHTML = decodeB64(b64);
+      });
+    }
   })();
   </script>
 @endpush

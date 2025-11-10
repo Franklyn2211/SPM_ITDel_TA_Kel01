@@ -12,7 +12,7 @@ class RefCategoryDetailController extends Controller
 {
     public function index()
     {
-        $categoryDetails = RefCategoryDetail::all();
+        $categoryDetails = RefCategoryDetail::paginate(10);
         $category = RefCategory::all();
         return view('admin.ref_category.detail', ['categoryDetails' => $categoryDetails, 'category' => $category]);
     }
@@ -20,14 +20,14 @@ class RefCategoryDetailController extends Controller
     public function store(Request $request)
     {
         $request->validate([
-            'category_id' => ['required','string','exists:ref_categories,id'],
-            'name'        => ['required','string','max:255','unique:ref_category_details,name'],
+            'category_id' => ['required', 'string', 'exists:ref_categories,id'],
+            'name' => ['required', 'string', 'max:255', 'unique:ref_category_details,name'],
         ], [
             'name.unique' => 'Detail kategori dengan nama yang sama sudah terdaftar.',
         ]);
 
         $detail = new RefCategoryDetail([
-            'id'   => RefCategoryDetail::generateNextId(),
+            'id' => RefCategoryDetail::generateNextId(),
             'name' => $request->get('name'),
         ]);
 
@@ -41,10 +41,12 @@ class RefCategoryDetailController extends Controller
     public function update(Request $request, RefCategoryDetail $categoryDetail)
     {
         $request->validate([
-            'category_id' => ['required','string','exists:ref_categories,id'],
-            'name'        => [
-                'required','string','max:255',
-                Rule::unique('ref_category_details','name')->ignore($categoryDetail->id, 'id'),
+            'category_id' => ['required', 'string', 'exists:ref_categories,id'],
+            'name' => [
+                'required',
+                'string',
+                'max:255',
+                Rule::unique('ref_category_details', 'name')->ignore($categoryDetail->id, 'id'),
             ],
         ], [
             'name.unique' => 'Detail kategori dengan nama yang sama sudah terdaftar.',

@@ -128,8 +128,8 @@
                   </div>
                 </td>
                 <td>
-                  {{-- tanggal_submit kamu simpan varchar; tetap aman diparse kalau formatnya tanggal --}}
-                  {{ $f->tanggal_submit ? \Illuminate\Support\Carbon::parse($f->tanggal_submit)->translatedFormat('d M Y') : '—' }}
+                  {{-- submitted_at kamu simpan varchar; tetap aman diparse kalau formatnya tanggal --}}
+                  {{ $f->submitted_at ? \Illuminate\Support\Carbon::parse($f->submitted_at)->translatedFormat('d M Y') : '—' }}
                 </td>
                 <td class="text-end">
                   <a href="#" class="btn btn-sm btn-primary" disabled><i class="ph-clipboard-text me-1"></i> Audit</a>
@@ -171,8 +171,8 @@
                 <td>
                   <div class="text-muted fs-sm">
                     Butir {{ $butirLabel !== '' ? $butirLabel : '-' }}
-                    @if($d->hasil)
-                      — <span class="fst-italic">"{{ \Illuminate\Support\Str::limit($d->hasil, 80) }}"</span>
+                    @if($d->result)
+                      — <span class="fst-italic">"{{ \Illuminate\Support\Str::limit($d->result, 80) }}"</span>
                     @endif
                   </div>
                 </td>

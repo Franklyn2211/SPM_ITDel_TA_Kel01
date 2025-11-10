@@ -6,28 +6,25 @@ use App\Http\Controllers\Controller;
 use App\Models\AcademicConfig;
 use App\Models\AmiStandardIndicator;
 use App\Models\AmiStandardIndicatorPic;
-use App\Models\EvaluasiDiri;
-use App\Models\EvaluasiDiriDetail;
-use App\Models\KetercapaianStandard;
-use App\Models\StatusEvaluasi;
+use App\Models\SelfEvaluationForm;
+use App\Models\SelfEvaluationDetail;
+use App\Models\StandardAchievement;
+use App\Models\EvaluationStatus;
+use App\Models\User;
 use App\Models\UserRole;
+use App\Models\Role;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Str;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
-
-// PhpWord: kita pakai TemplateProcessor untuk nge-populate DOCX template
 use PhpOffice\PhpWord\TemplateProcessor;
 
 class EvaluasiDiriController extends Controller
 {
-    // ==========================================
-    // KONFIG: path template DOCX
-    // ==========================================
     private const TEMPLATE_PATH = 'templates/F-219_Formulir_Evaluasi_Diri_Auditee.docx';
-    // Contoh lokasi file: storage/app/templates/F-219_Formulir_Evaluasi_Diri_Auditee.docx
 
     /* ================= Helpers ================= */
 
@@ -72,13 +69,13 @@ class EvaluasiDiriController extends Controller
         return optional($this->activeAcademic())->id;
     }
 
-    private function ensureFormOwnedByUser(EvaluasiDiri $form): void
+    private function ensureFormOwnedByUser(SelfEvaluationForm $form): void
     {
         $userCat = $this->resolveCategoryDetailId();
         abort_unless($userCat && $form->category_detail_id === $userCat, 403, 'Tidak berhak mengakses form ini.');
     }
 
-    private function ensureFormOnActiveYear(EvaluasiDiri $form): void
+    private function ensureFormOnActiveYear(SelfEvaluationForm $form): void
     {
         $activeId = $this->activeAcademicId();
         abort_unless($activeId && $form->academic_config_id === $activeId, 403, 'Form ini bukan untuk tahun akademik aktif.');
@@ -86,9 +83,8 @@ class EvaluasiDiriController extends Controller
 
     /**
      * Sinkron butir berdasarkan PIC role yang login.
-     * Hanya indikator & standar aktif di TA aktif yang dimasukkan.
      */
-    private function syncDetailsWithPIC(EvaluasiDiri $form, string $currentRoleId): void
+    private function syncDetailsWithPIC(SelfEvaluationForm $form, string $currentRoleId): void
     {
         $academicId = $form->academic_config_id;
 
@@ -114,18 +110,18 @@ class EvaluasiDiriController extends Controller
 
         if ($eligibleIndicatorIds->isEmpty()) return;
 
-        $existing = EvaluasiDiriDetail::where('form_evaluasi_diri_id', $form->id)
+        $existing = SelfEvaluationDetail::where('self_evaluation_form_id', $form->id)
             ->pluck('ami_standard_indicator_id');
 
         $missing = $eligibleIndicatorIds->diff($existing);
         if ($missing->isEmpty()) return;
 
-        $statusDraftId = StatusEvaluasi::where('name', 'Draft')->value('id');
+        $statusDraftId = EvaluationStatus::where('name', 'Draft')->value('id');
 
         foreach ($missing as $indId) {
-            EvaluasiDiriDetail::create([
-                'id'                        => EvaluasiDiriDetail::generateNextId(),
-                'form_evaluasi_diri_id'     => $form->id,
+            SelfEvaluationDetail::create([
+                'id'                        => SelfEvaluationDetail::generateNextId(),
+                'self_evaluation_form_id'   => $form->id,
                 'ami_standard_indicator_id' => $indId,
                 'status_id'                 => $statusDraftId,
                 'active'                    => true,
@@ -149,15 +145,20 @@ class EvaluasiDiriController extends Controller
                 ->value('name');
         }
 
-        $form = null;
-        $details = collect();
+        // DEFAULT KETUA: user login + jabatan dari role
+        $currentUser         = auth()->user();
+        $defaultHeadName     = $currentUser->name ?? null;
+        $defaultHeadPosition = optional($ur?->role)->name ?? null;
+
+        $form     = null;
+        $details  = collect();
         $progress = ['total' => 0, 'terisi' => 0, 'percent' => 0.0];
 
         if (!$academic)         session()->flash('warning', 'Tahun akademik aktif belum diset oleh admin.');
         if (!$categoryDetailId) session()->flash('warning', 'Akun Anda belum terhubung ke Unit/Prodi. Hubungi admin.');
 
         if ($academic && $categoryDetailId) {
-            $form = EvaluasiDiri::with(['status', 'categoryDetail'])
+            $form = SelfEvaluationForm::with(['status', 'categoryDetail'])
                 ->where('academic_config_id', $academic->id)
                 ->where('category_detail_id', $categoryDetailId)
                 ->first();
@@ -165,9 +166,9 @@ class EvaluasiDiriController extends Controller
             if ($form && $currentRoleId) {
                 DB::transaction(fn() => $this->syncDetailsWithPIC($form, $currentRoleId));
 
-                $details = EvaluasiDiriDetail::with(['AmiStandardIndicator', 'KetercapaianStandard', 'updatedBy'])
-                    ->where('form_evaluasi_diri_id', $form->id)
-                    ->whereHas('AmiStandardIndicator', function ($q) use ($academic, $currentRoleId) {
+                $allDetails = SelfEvaluationDetail::with(['indicator', 'standardAchievement', 'updatedBy'])
+                    ->where('self_evaluation_form_id', $form->id)
+                    ->whereHas('indicator', function ($q) use ($academic, $currentRoleId) {
                         $q->where('ami_standard_indicators.active', 1)
                             ->whereExists(function ($qq) use ($academic) {
                                 $qq->select(DB::raw(1))
@@ -187,9 +188,9 @@ class EvaluasiDiriController extends Controller
                     ->orderBy('ami_standard_indicator_id')
                     ->get();
 
-                $total  = $details->count();
-                $terisi = $details->filter(fn($d) =>
-                    !is_null($d->ketercapaian_standard_id) || (isset($d->hasil) && trim($d->hasil) !== '')
+                $total  = $allDetails->count();
+                $terisi = $allDetails->filter(fn($d) =>
+                    !is_null($d->standard_achievement_id) || (isset($d->result) && trim($d->result) !== '')
                 )->count();
 
                 $progress = [
@@ -197,13 +198,40 @@ class EvaluasiDiriController extends Controller
                     'terisi'  => $terisi,
                     'percent' => $total ? round(100 * $terisi / $total, 1) : 0.0,
                 ];
+
+                $perPage      = 10;
+                $currentPage  = LengthAwarePaginator::resolveCurrentPage();
+                $currentItems = $allDetails->slice(($currentPage - 1) * $perPage, $perPage)->values();
+
+                $details = new LengthAwarePaginator(
+                    $currentItems,
+                    $total,
+                    $perPage,
+                    $currentPage,
+                    ['path' => LengthAwarePaginator::resolveCurrentPath()]
+                );
             }
         }
 
-        $opsiKetercapaian = KetercapaianStandard::where('active', 1)->get();
+        $opsiKetercapaian = StandardAchievement::where('active', 1)->get();
+
+        $roles = Role::where('active', true)
+            ->orderBy('name')
+            ->get(['id', 'name']);
+
+        // dropdown anggota pakai AJAX ke searchUsers(), jadi tidak perlu preload $users di sini
 
         return view('auditee.fed.index', compact(
-            'academic', 'categoryDetailId', 'categoryDetailName', 'form', 'details', 'progress', 'opsiKetercapaian'
+            'academic',
+            'categoryDetailId',
+            'categoryDetailName',
+            'form',
+            'details',
+            'progress',
+            'opsiKetercapaian',
+            'defaultHeadName',
+            'defaultHeadPosition',
+            'roles'
         ));
     }
 
@@ -223,32 +251,63 @@ class EvaluasiDiriController extends Controller
             );
         }
 
-        if (EvaluasiDiri::where('academic_config_id', $academicId)->where('category_detail_id', $categoryDetailId)->exists()) {
+        if (SelfEvaluationForm::where('academic_config_id', $academicId)->where('category_detail_id', $categoryDetailId)->exists()) {
             return redirect()->route('auditee.fed.index')->with('info', 'Form sudah ada. Lanjutkan pengisian.');
         }
 
         $data = $request->validate([
             'ketua_auditee_nama'           => ['nullable', 'string', 'max:255'],
             'ketua_auditee_jabatan'        => ['nullable', 'string', 'max:255'],
-            'anggota_auditee_satu'         => ['nullable', 'string', 'max:255'],
+
+            'member_auditee_1_user_id'     => ['nullable', 'exists:users,id'],
             'anggota_auditee_jabatan_satu' => ['nullable', 'string', 'max:255'],
-            'anggota_auditee_dua'          => ['nullable', 'string', 'max:255'],
+
+            'member_auditee_2_user_id'     => ['nullable', 'exists:users,id'],
             'anggota_auditee_jabatan_dua'  => ['nullable', 'string', 'max:255'],
-            'anggota_auditee_tiga'         => ['nullable', 'string', 'max:255'],
+
+            'member_auditee_3_user_id'     => ['nullable', 'exists:users,id'],
             'anggota_auditee_jabatan_tiga' => ['nullable', 'string', 'max:255'],
         ]);
 
         DB::beginTransaction();
         try {
-            $statusDraftId = StatusEvaluasi::where('name', 'Draft')->value('id');
+            $statusDraftId = EvaluationStatus::where('name', 'Draft')->value('id');
 
-            $form = new EvaluasiDiri();
-            $form->id                 = EvaluasiDiri::generateNextId();
+            $currentUser = auth()->user();
+            $headName    = $data['ketua_auditee_nama'] ?: ($currentUser->name ?? null);
+            $headPos     = $data['ketua_auditee_jabatan'] ?: (optional($ur?->role)->name ?? null);
+
+            $member1Name = null;
+            if (!empty($data['member_auditee_1_user_id'])) {
+                $member1Name = optional(User::find($data['member_auditee_1_user_id']))->name;
+            }
+
+            $member2Name = null;
+            if (!empty($data['member_auditee_2_user_id'])) {
+                $member2Name = optional(User::find($data['member_auditee_2_user_id']))->name;
+            }
+
+            $member3Name = null;
+            if (!empty($data['member_auditee_3_user_id'])) {
+                $member3Name = optional(User::find($data['member_auditee_3_user_id']))->name;
+            }
+
+            $form = new SelfEvaluationForm();
+            $form->id                 = SelfEvaluationForm::generateNextId();
             $form->academic_config_id = $academicId;
             $form->category_detail_id = $categoryDetailId;
             $form->status_id          = $statusDraftId;
             $form->active             = true;
-            $form->fill($data);
+
+            $form->head_auditee_name         = $headName;
+            $form->head_auditee_position     = $headPos;
+            $form->member_auditee_1_name     = $member1Name;
+            $form->member_auditee_1_position = $data['anggota_auditee_jabatan_satu'] ?? null;
+            $form->member_auditee_2_name     = $member2Name;
+            $form->member_auditee_2_position = $data['anggota_auditee_jabatan_dua'] ?? null;
+            $form->member_auditee_3_name     = $member3Name;
+            $form->member_auditee_3_position = $data['anggota_auditee_jabatan_tiga'] ?? null;
+
             $form->save();
 
             if ($currentRoleId) {
@@ -271,9 +330,9 @@ class EvaluasiDiriController extends Controller
                     ->pluck('id');
 
                 foreach ($picIds as $indId) {
-                    EvaluasiDiriDetail::create([
-                        'id'                        => EvaluasiDiriDetail::generateNextId(),
-                        'form_evaluasi_diri_id'     => $form->id,
+                    SelfEvaluationDetail::create([
+                        'id'                        => SelfEvaluationDetail::generateNextId(),
+                        'self_evaluation_form_id'   => $form->id,
                         'ami_standard_indicator_id' => $indId,
                         'status_id'                 => $statusDraftId,
                         'active'                    => true,
@@ -289,12 +348,12 @@ class EvaluasiDiriController extends Controller
         }
     }
 
-    public function updateHeader(Request $request, EvaluasiDiri $form)
+    public function updateHeader(Request $request, SelfEvaluationForm $form)
     {
         $this->ensureFormOwnedByUser($form);
         $this->ensureFormOnActiveYear($form);
 
-        $submittedId = StatusEvaluasi::where('name', 'Dikirim')->value('id');
+        $submittedId = EvaluationStatus::where('name', 'Dikirim')->value('id');
         if ($form->status_id === $submittedId) {
             return back()->with('warning', 'Form sudah dikirim dan tidak dapat diubah.');
         }
@@ -302,23 +361,57 @@ class EvaluasiDiriController extends Controller
         $data = $request->validate([
             'ketua_auditee_nama'           => ['nullable', 'string', 'max:255'],
             'ketua_auditee_jabatan'        => ['nullable', 'string', 'max:255'],
-            'anggota_auditee_satu'         => ['nullable', 'string', 'max:255'],
+
+            'member_auditee_1_user_id'     => ['nullable', 'exists:users,id'],
             'anggota_auditee_jabatan_satu' => ['nullable', 'string', 'max:255'],
-            'anggota_auditee_dua'          => ['nullable', 'string', 'max:255'],
+
+            'member_auditee_2_user_id'     => ['nullable', 'exists:users,id'],
             'anggota_auditee_jabatan_dua'  => ['nullable', 'string', 'max:255'],
-            'anggota_auditee_tiga'         => ['nullable', 'string', 'max:255'],
+
+            'member_auditee_3_user_id'     => ['nullable', 'exists:users,id'],
             'anggota_auditee_jabatan_tiga' => ['nullable', 'string', 'max:255'],
         ]);
 
-        $form->update($data);
+        $headName = $data['ketua_auditee_nama'] ?: $form->head_auditee_name;
+        $headPos  = $data['ketua_auditee_jabatan'] ?: $form->head_auditee_position;
+
+        $member1Name = $form->member_auditee_1_name;
+        if (!empty($data['member_auditee_1_user_id'])) {
+            $member1Name = optional(User::find($data['member_auditee_1_user_id']))->name;
+        }
+        $member1Pos = $data['anggota_auditee_jabatan_satu'] ?? $form->member_auditee_1_position;
+
+        $member2Name = $form->member_auditee_2_name;
+        if (!empty($data['member_auditee_2_user_id'])) {
+            $member2Name = optional(User::find($data['member_auditee_2_user_id']))->name;
+        }
+        $member2Pos = $data['anggota_auditee_jabatan_dua'] ?? $form->member_auditee_2_position;
+
+        $member3Name = $form->member_auditee_3_name;
+        if (!empty($data['member_auditee_3_user_id'])) {
+            $member3Name = optional(User::find($data['member_auditee_3_user_id']))->name;
+        }
+        $member3Pos = $data['anggota_auditee_jabatan_tiga'] ?? $form->member_auditee_3_position;
+
+        $form->update([
+            'head_auditee_name'         => $headName,
+            'head_auditee_position'     => $headPos,
+            'member_auditee_1_name'     => $member1Name,
+            'member_auditee_1_position' => $member1Pos,
+            'member_auditee_2_name'     => $member2Name,
+            'member_auditee_2_position' => $member2Pos,
+            'member_auditee_3_name'     => $member3Name,
+            'member_auditee_3_position' => $member3Pos,
+        ]);
+
         return redirect()->route('auditee.fed.index')->with('success', 'Data auditee diperbarui.');
     }
 
-    public function updateDetail(Request $request, EvaluasiDiri $form, EvaluasiDiriDetail $detail)
+    public function updateDetail(Request $request, SelfEvaluationForm $form, SelfEvaluationDetail $detail)
     {
         $this->ensureFormOwnedByUser($form);
         $this->ensureFormOnActiveYear($form);
-        if ($detail->form_evaluasi_diri_id !== $form->id) abort(404);
+        if ($detail->self_evaluation_form_id !== $form->id) abort(404);
 
         $ur = $this->currentUserRole();
         $currentRoleId = $ur?->role_id;
@@ -329,7 +422,7 @@ class EvaluasiDiriController extends Controller
             ->exists();
         abort_unless($isPic, 403, 'Anda bukan PIC indikator ini.');
 
-        $submittedId = StatusEvaluasi::where('name', 'Dikirim')->value('id');
+        $submittedId = EvaluationStatus::where('name', 'Dikirim')->value('id');
         if ($form->status_id === $submittedId) {
             return back()->with('warning', 'Form sudah dikirim dan tidak dapat diedit.');
         }
@@ -341,22 +434,26 @@ class EvaluasiDiriController extends Controller
             'faktor_penghambat_pendukung' => ['nullable', 'string'],
         ]);
 
-        $draftId = StatusEvaluasi::where('name', 'Draft')->value('id');
+        $draftId = EvaluationStatus::where('name', 'Draft')->value('id');
 
-        $detail->update(array_merge($data, [
-            'status_id'  => $draftId,
-            'updated_by' => optional($ur)->id,
-        ]));
+        $detail->update([
+            'standard_achievement_id' => $data['ketercapaian_standard_id'] ?? null,
+            'result'                  => $data['hasil'] ?? null,
+            'supporting_evidence'     => $data['bukti_pendukung'] ?? null,
+            'contributing_factors'    => $data['faktor_penghambat_pendukung'] ?? null,
+            'status_id'               => $draftId,
+            'updated_by'              => optional($ur)->id,
+        ]);
 
         return redirect()->route('auditee.fed.index')->with('success', 'Butir tersimpan.');
     }
 
-    public function submit(Request $request, EvaluasiDiri $form)
+    public function submit(Request $request, SelfEvaluationForm $form)
     {
         $this->ensureFormOwnedByUser($form);
         $this->ensureFormOnActiveYear($form);
 
-        $submittedId = StatusEvaluasi::where('name', 'Dikirim')->value('id');
+        $submittedId = EvaluationStatus::where('name', 'Dikirim')->value('id');
         if ($form->status_id === $submittedId) {
             return back()->with('info', 'Form sudah dikirim.');
         }
@@ -364,8 +461,8 @@ class EvaluasiDiriController extends Controller
         $ur = $this->currentUserRole();
         $currentRoleId = $ur?->role_id;
 
-        $details = EvaluasiDiriDetail::where('form_evaluasi_diri_id', $form->id)
-            ->whereHas('AmiStandardIndicator', function ($q) use ($form, $currentRoleId) {
+        $details = SelfEvaluationDetail::where('self_evaluation_form_id', $form->id)
+            ->whereHas('indicator', function ($q) use ($form, $currentRoleId) {
                 $q->where('ami_standard_indicators.active', 1)
                     ->whereExists(function ($qq) use ($form) {
                         $qq->select(DB::raw(1))
@@ -382,10 +479,10 @@ class EvaluasiDiriController extends Controller
                             ->where('p.role_id', $currentRoleId);
                     });
             })
-            ->get(['ketercapaian_standard_id', 'hasil']);
+            ->get(['standard_achievement_id', 'result']);
 
         $incomplete = $details->filter(fn($d) =>
-            is_null($d->ketercapaian_standard_id) && (!isset($d->hasil) || trim($d->hasil) === '')
+            is_null($d->standard_achievement_id) && (!isset($d->result) || trim($d->result) === '')
         )->count();
 
         if ($incomplete > 0) {
@@ -395,60 +492,88 @@ class EvaluasiDiriController extends Controller
         }
 
         $form->update([
-            'status_id'      => $submittedId,
-            'tanggal_submit' => now()->toDateString(),
+            'status_id'     => $submittedId,
+            'submitted_at'  => now()->toDateString(),
         ]);
 
         return redirect()->route('auditee.fed.index')->with('success', 'Form berhasil dikirim. Terima kasih!');
     }
 
-    /**
-     * Export Word menggunakan TemplateProcessor.
-     * Template harus punya placeholder:
-     * - Header: categoryDetail, ta, ketua, anggota1, anggota2, anggota3, tanggal
-     * - Row: no, standar, melampaui, mencapai, tidak_mencapai, menyimpang, hasil, bukti, faktor
-     */
-    public function exportDoc(Request $request, EvaluasiDiri $form): BinaryFileResponse
+    public function searchUsers(Request $request)
     {
-        $this->ensureFormOwnedByUser($form);
-    $this->ensureFormOnActiveYear($form);
+        $q = trim($request->query('q', ''));
 
-    $submittedId = StatusEvaluasi::where('name','Dikirim')->value('id');
-    abort_unless($form->status_id === $submittedId, 403, 'Dokumen hanya tersedia setelah form dikirim.');
+        $users = User::query()
+            ->when($q !== '', function ($qq) use ($q) {
+                $qq->where(function ($sub) use ($q) {
+                    $sub->where('name', 'like', "%{$q}%")
+                        ->orWhere('email', 'like', "%{$q}%")
+                        ->orWhere('username', 'like', "%{$q}%");
+                });
+            })
+            ->where('active', 1)
+            ->orderBy('name')
+            ->limit(20)
+            ->get();
 
-    if (!class_exists(\ZipArchive::class)) {
-        abort(500, 'PHP Zip extension belum aktif.');
+        $results = $users->map(function ($u) {
+            if (!empty($u->cis_user_id)) {
+                $ur = UserRole::where('cis_user_id', $u->cis_user_id)->where('active', 1)->latest('created_at')->first()
+                   ?? UserRole::where('cis_user_id', $u->cis_user_id)->latest('created_at')->first();
+            } else {
+                $ur = UserRole::where('id', $u->id)->where('active', 1)->latest('created_at')->first()
+                   ?? UserRole::where('id', $u->id)->latest('created_at')->first();
+            }
+
+            $roleName = optional($ur?->role)->name ?? 'Anggota';
+
+            return [
+                'id'        => $u->id,
+                'name'      => $u->name,
+                'role_name' => $roleName,
+            ];
+        });
+
+        return response()->json($results);
     }
 
-    // ===== PENTING: batasi ke indikator milik role yang login =====
-    $ur            = $this->currentUserRole();
-    $currentRoleId = $ur?->role_id;
+    public function exportDoc(Request $request, SelfEvaluationForm $form): BinaryFileResponse
+    {
+        $this->ensureFormOwnedByUser($form);
+        $this->ensureFormOnActiveYear($form);
 
-    $details = EvaluasiDiriDetail::with(['AmiStandardIndicator.standard','KetercapaianStandard'])
-        ->where('form_evaluasi_diri_id', $form->id)
-        ->whereHas('AmiStandardIndicator', function ($q) use ($form, $currentRoleId) {
-            $q->where('ami_standard_indicators.active', 1)
-              // standar masih aktif dan di TA form
-              ->whereExists(function ($qq) use ($form) {
-                  $qq->select(DB::raw(1))
-                     ->from('ami_standards as s')
-                     ->whereColumn('s.id', 'ami_standard_indicators.standard_id')
-                     ->where('s.active', 1)
-                     ->where('s.academic_config_id', $form->academic_config_id);
-              })
-              // hanya indikator yg PIC-nya = role yg login
-              ->whereExists(function ($qp) use ($currentRoleId) {
-                  $qp->select(DB::raw(1))
-                     ->from('ami_standard_indicator_pic as p')
-                     ->whereColumn('p.standard_indicator_id', 'ami_standard_indicators.id')
-                     ->where('p.active', 1)
-                     ->where('p.role_id', $currentRoleId);
-              });
-        })
-        ->orderBy('ami_standard_indicator_id')
-        ->get();
+        $submittedId = EvaluationStatus::where('name','Dikirim')->value('id');
+        abort_unless($form->status_id === $submittedId, 403, 'Dokumen hanya tersedia setelah form dikirim.');
 
-        // 2) Siapkan template
+        if (!class_exists(\ZipArchive::class)) {
+            abort(500, 'PHP Zip extension belum aktif.');
+        }
+
+        $ur            = $this->currentUserRole();
+        $currentRoleId = $ur?->role_id;
+
+        $details = SelfEvaluationDetail::with(['indicator.standard','standardAchievement'])
+            ->where('self_evaluation_form_id', $form->id)
+            ->whereHas('indicator', function ($q) use ($form, $currentRoleId) {
+                $q->where('ami_standard_indicators.active', 1)
+                    ->whereExists(function ($qq) use ($form) {
+                        $qq->select(DB::raw(1))
+                            ->from('ami_standards as s')
+                            ->whereColumn('s.id', 'ami_standard_indicators.standard_id')
+                            ->where('s.active', 1)
+                            ->where('s.academic_config_id', $form->academic_config_id);
+                    })
+                    ->whereExists(function ($qp) use ($currentRoleId) {
+                        $qp->select(DB::raw(1))
+                            ->from('ami_standard_indicator_pic as p')
+                            ->whereColumn('p.standard_indicator_id', 'ami_standard_indicators.id')
+                            ->where('p.active', 1)
+                            ->where('p.role_id', $currentRoleId);
+                    });
+            })
+            ->orderBy('ami_standard_indicator_id')
+            ->get();
+
         $templateAbsPath = storage_path('app/' . self::TEMPLATE_PATH);
         if (!is_file($templateAbsPath)) {
             abort(500, 'Template DOCX tidak ditemukan: ' . self::TEMPLATE_PATH);
@@ -456,15 +581,14 @@ class EvaluasiDiriController extends Controller
 
         $tp = new TemplateProcessor($templateAbsPath);
 
-        // 3) Set header values
         $taName   = optional($form->academicConfig)->name ?? '-';
         $unitName = optional($form->categoryDetail)->name ?? '-';
 
-        $ketua = trim(($form->ketua_auditee_jabatan ?? '') . ' / ' . ($form->ketua_auditee_nama ?? ''), ' /');
-        $namaketua = trim(($form->ketua_auditee_nama ?? ''));
-        $angg1 = trim(($form->anggota_auditee_jabatan_satu ?? '') . ' / ' . ($form->anggota_auditee_satu ?? ''), ' /');
-        $angg2 = trim(($form->anggota_auditee_jabatan_dua ?? '') . ' / ' . ($form->anggota_auditee_dua ?? ''), ' /');
-        $angg3 = trim(($form->anggota_auditee_jabatan_tiga ?? '') . ' / ' . ($form->anggota_auditee_tiga ?? ''), ' /');
+        $ketua      = trim(($form->head_auditee_position ?? '') . ' / ' . ($form->head_auditee_name ?? ''), ' /');
+        $namaketua  = trim(($form->head_auditee_name ?? ''));
+        $angg1      = trim(($form->member_auditee_1_position ?? '') . ' / ' . ($form->member_auditee_1_name ?? ''), ' /');
+        $angg2      = trim(($form->member_auditee_2_position ?? '') . ' / ' . ($form->member_auditee_2_name ?? ''), ' /');
+        $angg3      = trim(($form->member_auditee_3_position ?? '') . ' / ' . ($form->member_auditee_3_name ?? ''), ' /');
 
         $tp->setValue('categoryDetail', $unitName);
         $tp->setValue('ta', $taName);
@@ -475,40 +599,46 @@ class EvaluasiDiriController extends Controller
         $tp->setValue('anggota3', $angg3 ?: '-');
         $tp->setValue('tanggal', now()->format('d/m/Y'));
 
-        // 4) Siapkan data baris untuk cloneRow
-        $rows = [];
-        foreach ($details as $i => $d) {
-            $stdName   = optional($d->AmiStandardIndicator?->standard)->name ?? '-';
-            $descPlain = trim(strip_tags($d->AmiStandardIndicator->description ?? ''));
-            $judul     = $stdName . ($descPlain ? ': ' . $descPlain : '');
+        $cleanText = function (?string $value, string $fallback = '—'): string {
+        $text = $value ?? '';
+        // buang HTML
+        $text = strip_tags($text);
+        // buang control chars yang bikin XML rusak
+        $text = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F]/u', '', $text);
+        $text = trim($text);
+        return $text === '' ? $fallback : $text;
+    };
 
-            $flag = strtolower(optional($d->KetercapaianStandard)->name ?? '');
+    $rows = [];
+    foreach ($details as $i => $d) {
+        $stdName   = optional($d->indicator?->standard)->name ?? '-';
+        $descPlain = trim(strip_tags($d->indicator->description ?? ''));
+        $judul     = $cleanText($stdName . ($descPlain ? ': ' . $descPlain : ''), '-');
 
-            $rows[] = [
-                'no'              => (string)($i + 1),
-                'standar'         => $judul,
-                'hasil'           => trim((string)$d->hasil) ?: '—',
-                'bukti'           => trim((string)$d->bukti_pendukung) ?: '—',
-                'faktor'          => trim((string)$d->faktor_penghambat_pendukung) ?: '—',
-                'melampaui'       => $flag === 'melampaui' ? '✓' : '',
-                'mencapai'        => $flag === 'mencapai' ? '✓' : '',
-                'tidak_mencapai'  => $flag === 'tidak mencapai' ? '✓' : '',
-                'menyimpang'      => $flag === 'menyimpang' ? '✓' : '',
-            ];
-        }
+        $flag = strtolower(optional($d->standardAchievement)->name ?? '');
 
-        if (empty($rows)) {
-            // tetap clone minimal 1 baris biar gak meledak
-            $rows[] = [
-                'no' => '1', 'standar' => '-', 'hasil' => '-', 'bukti' => '-', 'faktor' => '-',
-                'melampaui' => '', 'mencapai' => '', 'tidak_mencapai' => '', 'menyimpang' => '',
-            ];
-        }
+        $rows[] = [
+            'no'              => (string)($i + 1),
+            'standar'         => $judul,
+            'hasil'           => $cleanText($d->result),
+            'bukti'           => $cleanText($d->supporting_evidence),
+            'faktor'          => $cleanText($d->contributing_factors),
+            'melampaui'       => $flag === 'melampaui' ? '✓' : '',
+            'mencapai'        => $flag === 'mencapai' ? '✓' : '',
+            'tidak_mencapai'  => $flag === 'tidak mencapai' ? '✓' : '',
+            'menyimpang'      => $flag === 'menyimpang' ? '✓' : '',
+        ];
+    }
 
-        // 5) Clone row dan set values
-        $tp->cloneRowAndSetValues('no', $rows);
+    if (empty($rows)) {
+        $rows[] = [
+            'no' => '1', 'standar' => '-', 'hasil' => '-', 'bukti' => '-', 'faktor' => '-',
+            'melampaui' => '', 'mencapai' => '', 'tidak_mencapai' => '', 'menyimpang' => '',
+        ];
+    }
 
-        // 6) Simpan ke tmp dan download
+    $tp->cloneRowAndSetValues('no', $rows);
+
         $safe = function (string $name): string {
             $name = preg_replace('/[\\\\\\/\\:\\*\\?\\"\\<\\>\\|]+/', '-', $name);
             $name = trim(preg_replace('/\\s+/', ' ', $name));
@@ -519,12 +649,10 @@ class EvaluasiDiriController extends Controller
         $safeUnit = $safe($unitName);
         $filename = "FED_{$safeUnit}_TA_{$safeTA}.docx";
 
-        // simpan ke storage/app/tmp atau sys temp
         $tmpDir = storage_path('app/tmp');
         if (!is_dir($tmpDir)) @mkdir($tmpDir, 0775, true);
         $target = rtrim($tmpDir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $filename;
 
-        // hapus file lama kalau ada, biar gak “cannot open for writing”
         if (file_exists($target)) @unlink($target);
 
         $tp->saveAs($target);

@@ -11,7 +11,7 @@ class RefCategoryController extends Controller
 {
     public function index()
     {
-        $category = RefCategory::all();
+        $category = RefCategory::paginate(10);
         return view('admin.ref_category.index', ['category' => $category]);
     }
 

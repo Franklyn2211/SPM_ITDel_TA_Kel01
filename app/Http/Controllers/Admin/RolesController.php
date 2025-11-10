@@ -13,7 +13,7 @@ class RolesController extends Controller
     public function index()
     {
         $category = RefCategory::all();
-        $roles = Role::all();
+        $roles = Role::with('category')->paginate(10);
         return view('admin.roles.add', ['roles' => $roles, 'category' => $category]);
     }
 

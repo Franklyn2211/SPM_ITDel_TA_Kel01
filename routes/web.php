@@ -27,11 +27,12 @@ Route::prefix('auditee')->name('auditee.')->middleware(['auth', 'role:Ketua Prog
 
     // Halaman khusus FED (index menampilkan header + detail)
     Route::get('/fed', [EvaluasiDiriController::class, 'index'])->name('fed.index');
-        Route::post('/fed', [EvaluasiDiriController::class, 'store'])->name('fed.store'); // buat header+detail
-        Route::put('/fed/{form}', [EvaluasiDiriController::class, 'updateHeader'])->name('fed.updateHeader');
-        Route::put('/fed/{form}/detail/{detail}', [EvaluasiDiriController::class, 'updateDetail'])->name('fed.updateDetail');
-        Route::post('/fed/{form}/submit', [EvaluasiDiriController::class, 'submit'])->name('fed.submit');
-        Route::get('/fed/{form}/export', [EvaluasiDiriController::class, 'exportDoc'])->name('fed.export');
+    Route::post('/fed', [EvaluasiDiriController::class, 'store'])->name('fed.store'); // buat header+detail
+    Route::put('/fed/{form}', [EvaluasiDiriController::class, 'updateHeader'])->name('fed.updateHeader');
+    Route::put('/fed/{form}/detail/{detail}', [EvaluasiDiriController::class, 'updateDetail'])->name('fed.updateDetail');
+    Route::post('/fed/{form}/submit', [EvaluasiDiriController::class, 'submit'])->name('fed.submit');
+    Route::get('user/search', [EvaluasiDiriController::class, 'searchUsers'])->name('fed.searchUsers');
+    Route::get('/fed/{form}/export', [EvaluasiDiriController::class, 'exportDoc'])->name('fed.export');
 });
 
 // ==== AREA ADMIN ====
@@ -73,6 +74,9 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'admin.byname'])->gr
     Route::post('ami/standard', [AmiStandardController::class, 'store'])->name('ami.standard.store');
     Route::put('ami/standard/{amiStandard}', [AmiStandardController::class, 'update'])->name('ami.standard.update');
     Route::delete('ami/standard/{amiStandard}', [AmiStandardController::class, 'destroy'])->name('ami.standard.destroy');
+    // Global submit: aktif/nonaktifkan standar secara massal (tidak per-ID)
+    Route::post('ami/standard/submit', [AmiStandardController::class, 'submit'])
+        ->name('ami.standard.submit');
 
     Route::get('ami/indicator', [AmiIndicatorController::class, 'index'])->name('ami.indicator');
     Route::post('ami/indicator', [AmiIndicatorController::class, 'store'])->name('ami.indicator.store');

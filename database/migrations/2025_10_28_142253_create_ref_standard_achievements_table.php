@@ -11,7 +11,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('ref_ketercapaian_standard', function (Blueprint $table) {
+        Schema::create('ref_standard_achievements', function (Blueprint $table) {
             $table->string('id')->primary();
             $table->string('name');
             $table->string('created_by')->nullable();
@@ -30,6 +30,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('ref_ketercapaian_standard');
+        Schema::dropIfExists('ref_standard_achievements');
     }
 };

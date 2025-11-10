@@ -11,14 +11,18 @@ class AmiStandardIndicator extends Model
     protected $primaryKey = 'id';
     public $incrementing = false;
     protected $keyType = 'string';
+
     protected $fillable = [
         'id',
         'description',
         'standard_id',
+        'positive_result_template',
+        'negative_result_template',
         'created_by',
         'updated_by',
         'active',
     ];
+
     protected $casts = [
         'active' => 'boolean',
     ];
@@ -74,7 +78,7 @@ class AmiStandardIndicator extends Model
         // Check if the next number already exists
         $nextId = 'ASI' . str_pad((string) $nextNumber, 3, '0', STR_PAD_LEFT);
 
-        // If the ID already exists, recursively call the method until we get a unique one
+        // If the ID already exists, recursively call the method until a unique one is generated
         if (self::where('id', $nextId)->exists()) {
             return self::generateNextId(); // Recursive call until a unique ID is generated
         }
