@@ -16,8 +16,6 @@ class AmiStandardIndicator extends Model
         'id',
         'description',
         'standard_id',
-        'positive_result_template',
-        'negative_result_template',
         'created_by',
         'updated_by',
         'active',

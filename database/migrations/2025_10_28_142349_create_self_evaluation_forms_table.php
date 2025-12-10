@@ -18,29 +18,32 @@ return new class extends Migration
             $table->string('category_detail_id');
             $table->string('academic_config_id');
 
-            // Ketua auditee (diambil dari yang login, tapi tetap disimpan snapshot nama & jabatannya)
+            // Ketua auditee
             $table->string('head_auditee_name');
             $table->string('head_auditee_position');
 
-            // Anggota auditee 1 (nama & jabatan hasil pilihan dropdown user/role)
+            // Anggota auditee 1
             $table->string('member_auditee_1_name')->nullable();
             $table->string('member_auditee_1_position')->nullable();
+            $table->unsignedBigInteger('member_auditee_1_user_id')->nullable();   // <—
 
             // Anggota auditee 2
             $table->string('member_auditee_2_name')->nullable();
             $table->string('member_auditee_2_position')->nullable();
+            $table->unsignedBigInteger('member_auditee_2_user_id')->nullable();   // <—
 
             // Anggota auditee 3
             $table->string('member_auditee_3_name')->nullable();
             $table->string('member_auditee_3_position')->nullable();
+            $table->unsignedBigInteger('member_auditee_3_user_id')->nullable();   // <—
 
-            // Status workflow evaluasi
+            // Status
             $table->string('status_id');
 
-            // Tanggal submit
+            // Submit
             $table->date('submitted_at')->nullable();
 
-            // Audit trail pakai user_roles (sesuai ERD kamu)
+            // Audit trail
             $table->string('created_by')->nullable();
             $table->string('updated_by')->nullable();
 
@@ -71,6 +74,22 @@ return new class extends Migration
             $table->foreign('updated_by')
                 ->references('id')
                 ->on('user_roles')
+                ->nullOnDelete();
+
+            // Foreign key ke tabel users
+            $table->foreign('member_auditee_1_user_id')
+                ->references('id')
+                ->on('users')
+                ->nullOnDelete();
+
+            $table->foreign('member_auditee_2_user_id')
+                ->references('id')
+                ->on('users')
+                ->nullOnDelete();
+
+            $table->foreign('member_auditee_3_user_id')
+                ->references('id')
+                ->on('users')
                 ->nullOnDelete();
         });
     }

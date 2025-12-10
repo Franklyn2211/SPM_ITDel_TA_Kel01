@@ -70,20 +70,12 @@ class SyncCisUsers extends Command
             $rows = [];
         };
 
-        // Dosen
-        $this->info('Sync Dosen…');
-        foreach ($client->getAll(env('CIS_LECTURERS_PATH', '/library-api/dosen'), ['per_page' => $perPage], 'data.dosen') as $row) {
-            if ($m = $map($row)) {
-                $buffer[] = $m;
-                if (count($buffer) >= 1000)
-                    $flush($buffer);
-            }
-        }
-        $flush($buffer);
-
         // Pegawai
         $this->info('Sync Pegawai…');
         foreach ($client->getAll(env('CIS_EMPLOYEES_PATH', '/library-api/pegawai'), ['per_page' => $perPage], 'data.pegawai') as $row) {
+            if (data_get($row, 'status_pegawai') !== 'A') {
+                continue;
+            }
             if ($m = $map($row)) {
                 $buffer[] = $m;
                 if (count($buffer) >= 1000)

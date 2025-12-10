@@ -13,28 +13,31 @@ class AmiStandardController extends Controller
     {
         $isHistory = (bool) $request->query('history', false);
 
-        $rows = AmiStandard::query()
-            ->with([
-                'academicConfig:id,name,academic_code',
-                'createdBy:id,name',
-                'updatedBy:id,name',
-            ])
-            // hitung indikator aktif per standar
-            ->withCount([
-                'indicators as indicators_count' => function ($q) {
-                    $q->where('active', true);
-                },
-            ])
-            // Tampilkan hanya standar pada Tahun Akademik sesuai mode:
-            // - default (history=0): hanya TA aktif
-            // - history=1: hanya TA tidak aktif (riwayat)
-            ->whereHas('academicConfig', function ($q) use ($isHistory) {
-                $q->where('active', !$isHistory);
+        $q = trim((string) $request->input('q', ''));
+        $rows = AmiStandard::with(['academicConfig', 'createdBy'])
+            ->withCount('indicators')
+            ->when($isHistory, function ($query) {
+                // Hanya standar dari tahun akademik yang tidak aktif
+                $query->whereHas('academicConfig', function ($ac) {
+                    $ac->where('active', false);
+                });
+            }, function ($query) {
+                // Default: hanya standar dari tahun akademik aktif
+                $query->whereHas('academicConfig', function ($ac) {
+                    $ac->where('active', true);
+                });
             })
-            // jangan filter active = 1, biar admin bisa lihat draft juga (dalam TA terpilih)
-            ->orderByDesc('active')       // published duluan
+            ->when($q !== '', function ($query) use ($q) {
+                $query->where(function ($sub) use ($q) {
+                    $sub->where('name', 'like', "%{$q}%")
+                        ->orWhereHas('academicConfig', function ($ac) use ($q) {
+                            $ac->where('academic_code', 'like', "%{$q}%");
+                        });
+                });
+            })
             ->orderByDesc('created_at')
-            ->paginate(10);
+            ->paginate(10)
+            ->withQueryString();
 
         // Flag apakah ada standar yang aktif untuk mengatur tombol Submit (activate/deactivate)
         // Hanya dihitung pada TA aktif, agar tombol tidak tampil saat melihat riwayat

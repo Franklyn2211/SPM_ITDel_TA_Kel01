@@ -34,7 +34,9 @@
       </div>
       <div class="ms-auto">
         @if($activeAc)
-          <span class="badge bg-primary">TA Aktif: {{ $activeAc->academic_code ?? $activeAc->name ?? '-' }}</span>
+          <span class="badge bg-primary">
+            TA Aktif: {{ $activeAc->academic_code ?? $activeAc->name ?? '-' }}
+          </span>
         @else
           <span class="badge bg-warning text-dark">TA aktif belum dipilih</span>
         @endif
@@ -49,138 +51,107 @@
   {{-- KOLOM KIRI --}}
   <div class="col-xl-8">
 
-    {{-- Ringkasan cepat --}}
-    <div class="row g-3">
+    {{-- Ringkasan indikator per kategori --}}
+    <div class="row g-3 mb-3">
       <div class="col-sm-3">
-        <div class="card border-0 shadow-sm">
+        <div class="card border-0 shadow-sm h-100">
           <div class="card-body">
-            <div class="text-muted fs-sm">Standar (TA aktif)</div>
-            <div class="d-flex align-items-center">
-              <h3 class="mb-0">{{ $counts['standards'] ?? 0 }}</h3>
-              <a class="ms-auto btn btn-sm btn-light" href="{{ route('admin.ami.standard') }}"><i class="ph-list"></i></a>
+            <div class="d-flex justify-content-between mb-1">
+              <div class="text-muted fs-sm">Fakultas</div>
+              <i class="ph-buildings text-muted"></i>
             </div>
+            <div class="small text-muted">Jumlah Indikator</div>
+            <h3 class="mb-0 mt-1">{{ $indicatorSummary['faculty'] ?? 0 }}</h3>
           </div>
         </div>
       </div>
+
       <div class="col-sm-3">
-        <div class="card border-0 shadow-sm">
+        <div class="card border-0 shadow-sm h-100">
           <div class="card-body">
-            <div class="text-muted fs-sm">Indikator (TA aktif)</div>
-            <div class="d-flex align-items-center">
-              <h3 class="mb-0">{{ $counts['indicators'] ?? 0 }}</h3>
-              <a class="ms-auto btn btn-sm btn-light" href="{{ route('admin.ami.indicator') }}"><i class="ph-list"></i></a>
+            <div class="d-flex justify-content-between mb-1">
+              <div class="text-muted fs-sm">Prodi</div>
+              <i class="ph-graduation-cap text-muted"></i>
             </div>
+            <div class="small text-muted">Jumlah Indikator</div>
+            <h3 class="mb-0 mt-1">{{ $indicatorSummary['prodi'] ?? 0 }}</h3>
           </div>
         </div>
       </div>
+
       <div class="col-sm-3">
-        <div class="card border-0 shadow-sm">
+        <div class="card border-0 shadow-sm h-100">
           <div class="card-body">
-            <div class="text-muted fs-sm">PIC Assignment</div>
-            <div class="d-flex align-items-center">
-              <h3 class="mb-0">{{ $counts['pics'] ?? 0 }}</h3>
-              <a class="ms-auto btn btn-sm btn-light" href="{{ route('admin.ami.indicator') }}"><i class="ph-users-three"></i></a>
+            <div class="d-flex justify-content-between mb-1">
+              <div class="text-muted fs-sm">Unit</div>
+              <i class="ph-squares-four text-muted"></i>
             </div>
+            <div class="small text-muted">Jumlah Indikator</div>
+            <h3 class="mb-0 mt-1">{{ $indicatorSummary['unit'] ?? 0 }}</h3>
           </div>
         </div>
       </div>
+
       <div class="col-sm-3">
-        <div class="card border-0 shadow-sm">
+        <div class="card border-0 shadow-sm h-100">
           <div class="card-body">
-            <div class="text-muted fs-sm">Role aktif</div>
-            <div class="d-flex align-items-center">
-              <h3 class="mb-0">{{ $counts['roles'] ?? 0 }}</h3>
-              <a class="ms-auto btn btn-sm btn-light" href="{{ route('admin.roles.index') }}"><i class="ph-gear"></i></a>
+            <div class="d-flex justify-content-between mb-1">
+              <div class="text-muted fs-sm">Total Indikator (TA aktif)</div>
+              <i class="ph-target text-muted"></i>
             </div>
+            <h3 class="mb-0 mt-3">{{ $indicatorSummary['total'] ?? 0 }}</h3>
           </div>
         </div>
       </div>
     </div>
 
-    {{-- Form Dikirim (Menunggu Audit) --}}
-    <div class="card mt-3">
+        {{-- FED sample (sebagian rekap FED) --}}
+    <div class="card">
       <div class="card-header d-flex align-items-center">
-        <h5 class="mb-0">Form Evaluasi Diri — Dikirim (Menunggu Audit)</h5>
-        <span class="badge bg-success ms-2">{{ $queueSubmitted->count() }}</span>
+        <h5 class="mb-0">Rekap Form Evaluasi Diri</h5>
         <div class="ms-auto">
-          <a href="{{ route('admin.ami.standard') }}" class="btn btn-sm btn-light">Kelola Standar</a>
+          <a href="{{ route('admin.fed.rekap.index', ['category' => 'semua']) }}" class="btn btn-sm btn-outline-primary">
+            Lihat semua rekap
+          </a>
         </div>
       </div>
-      <div class="table-responsive">
-        <table class="table align-middle text-nowrap">
-          <thead>
-            <tr>
-              <th>Unit/Prodi</th>
-              <th class="text-center" style="width:160px;">Progress</th>
-              <th style="width:160px;">Tanggal Kirim</th>
-              <th class="text-end" style="width:120px;">Aksi</th>
-            </tr>
-          </thead>
-          <tbody>
-            @forelse($queueSubmitted as $f)
-              @php $p = $filledByForm[$f->id] ?? ['total'=>0,'terisi'=>0,'percent'=>0]; @endphp
-              <tr>
-                <td>{{ optional($f->categoryDetail)->name ?? '-' }}</td>
-                <td class="text-center">
-                  <div class="small text-muted mb-1">{{ $p['terisi'] }}/{{ $p['total'] }} ({{ $p['percent'] }}%)</div>
-                  <div class="progress" style="height:8px;">
-                    <div class="progress-bar" style="width: {{ $p['percent'] }}%"></div>
-                  </div>
-                </td>
-                <td>
-                  {{-- submitted_at kamu simpan varchar; tetap aman diparse kalau formatnya tanggal --}}
-                  {{ $f->submitted_at ? \Illuminate\Support\Carbon::parse($f->submitted_at)->translatedFormat('d M Y') : '—' }}
-                </td>
-                <td class="text-end">
-                  <a href="#" class="btn btn-sm btn-primary" disabled><i class="ph-clipboard-text me-1"></i> Audit</a>
-                </td>
-              </tr>
-            @empty
-              <tr><td colspan="4" class="text-center text-muted">Belum ada form yang dikirim pada TA aktif.</td></tr>
-            @endforelse
-          </tbody>
-        </table>
-      </div>
-    </div>
 
-    {{-- Aktivitas Terbaru --}}
-    <div class="card mt-3">
-      <div class="card-header">
-        <h5 class="mb-0">Aktivitas Terbaru</h5>
-      </div>
       <div class="table-responsive">
-        <table class="table text-nowrap align-middle">
+        <table class="table table-hover mb-0">
           <thead>
             <tr>
-              <th style="width:60px;">#</th>
-              <th>Ringkasan</th>
-              <th>Diubah oleh</th>
-              <th>Waktu</th>
+              <th>Nama Unit</th>
+              <th>Penanggung Jawab</th>
+              <th class="text-center">Indikator Terisi</th>
+              <th class="text-center">Progress</th>
+              <th>Tanggal Submit</th>
             </tr>
           </thead>
           <tbody>
-            @forelse($recent as $i => $d)
-              @php
-                $ind = $indicatorMap[$d->ami_standard_indicator_id] ?? null;
-                $stdName = $ind?->standard?->name;
-                $desc = \Illuminate\Support\Str::limit(strip_tags($ind->description ?? ''), 60);
-                $butirLabel = trim(($stdName ? $stdName.' — ' : '').$desc);
-              @endphp
+            @forelse($fedSample as $row)
               <tr>
-                <td>{{ $i+1 }}</td>
+                <td>{{ $row['name'] }}</td>
                 <td>
-                  <div class="text-muted fs-sm">
-                    Butir {{ $butirLabel !== '' ? $butirLabel : '-' }}
-                    @if($d->result)
-                      — <span class="fst-italic">"{{ \Illuminate\Support\Str::limit($d->result, 80) }}"</span>
-                    @endif
+                  {{ $row['primary_role'] ?? '-' }}<br>
+                  <span class="text-muted small">{{ $row['primary_name'] ?? '-' }}</span>
+                </td>
+                <td class="text-center">
+                  {{ $row['filled'] ?? 0 }}/{{ $row['total'] ?? 0 }}
+                </td>
+                <td class="text-center">
+                  {{ $row['percent'] ?? 0 }}%
+                  <div class="progress mt-1" style="height:4px;">
+                    <div class="progress-bar" style="width: {{ $row['percent'] ?? 0 }}%;"></div>
                   </div>
                 </td>
-                <td>{{ $d->updater_name ?? $d->updater_username ?? '—' }}</td>
-                <td>{{ \Illuminate\Support\Carbon::parse($d->updated_at)->diffForHumans() }}</td>
+                <td>{{ $row['submitted_at'] ?? '—' }}</td>
               </tr>
             @empty
-              <tr><td colspan="4" class="text-center text-muted">Belum ada aktivitas.</td></tr>
+              <tr>
+                <td colspan="5" class="text-center text-muted">
+                  Belum ada data FED pada TA aktif.
+                </td>
+              </tr>
             @endforelse
           </tbody>
         </table>
@@ -192,52 +163,8 @@
   {{-- KOLOM KANAN --}}
   <div class="col-xl-4">
 
-    {{-- Statistik Ketercapaian --}}
-    <div class="card">
-      <div class="card-header d-flex align-items-center">
-        <h5 class="mb-0">Statistik Ketercapaian (TA aktif)</h5>
-      </div>
-      <div class="card-body">
-        <ul class="list-unstyled mb-0">
-          <li class="d-flex justify-content-between py-1">
-            <span>Melampaui</span><span class="badge bg-success bg-opacity-10 text-success">{{ $statsK['Melampaui'] }}</span>
-          </li>
-          <li class="d-flex justify-content-between py-1">
-            <span>Mencapai</span><span class="badge bg-primary bg-opacity-10 text-primary">{{ $statsK['Mencapai'] }}</span>
-          </li>
-          <li class="d-flex justify-content-between py-1">
-            <span>Tidak Mencapai</span><span class="badge bg-warning text-dark">{{ $statsK['Tidak Mencapai'] }}</span>
-          </li>
-          <li class="d-flex justify-content-between py-1">
-            <span>Menyimpang</span><span class="badge bg-danger bg-opacity-10 text-danger">{{ $statsK['Menyimpang'] }}</span>
-          </li>
-          <li class="d-flex justify-content-between py-1">
-            <span>Kosong</span><span class="badge bg-secondary">{{ $statsK['Kosong'] }}</span>
-          </li>
-        </ul>
-      </div>
-    </div>
-
-    {{-- Coverage PIC per Role --}}
-    <div class="card mt-3">
-      <div class="card-header d-flex align-items-center">
-        <h5 class="mb-0">PIC Coverage (Top 8)</h5>
-      </div>
-      <div class="list-group list-group-borderless">
-        @forelse($picCoverage as $pc)
-          <div class="list-group-item d-flex align-items-center">
-            <i class="ph-users-three me-2"></i>
-            <div class="me-auto">{{ optional($pc->role)->name ?? ('Role #'.$pc->role_id) }}</div>
-            <span class="badge bg-secondary">{{ $pc->c }}</span>
-          </div>
-        @empty
-          <div class="list-group-item text-muted">Belum ada assignment PIC.</div>
-        @endforelse
-      </div>
-    </div>
-
     {{-- Kesenjangan Data --}}
-    <div class="card mt-3">
+    <div class="card">
       <div class="card-header">
         <h5 class="mb-0">Kesenjangan Data</h5>
       </div>
@@ -247,13 +174,16 @@
           @forelse($standardsNoIndicators as $s)
             <div class="d-flex align-items-center mb-1">
               <i class="ph-warning-circle text-warning me-2"></i>
-              <a href="{{ route('admin.ami.indicator', ['standard_id' => $s->id]) }}" class="text-body">
+              <a href="{{ route('admin.ami.indicator', ['standard_id' => $s->id]) }}"
+                 class="text-body">
                 {{ $s->name }}
               </a>
-              <span class="ms-2 text-muted small">TA {{ optional($s->academicConfig)->academic_code }}</span>
+              <span class="ms-2 text-muted small">
+                TA {{ optional($s->academicConfig)->academic_code }}
+              </span>
             </div>
           @empty
-            <div class="text-muted">Tidak ada.</div>
+            <div class="text-muted small">Tidak ada.</div>
           @endforelse
         </div>
 
@@ -265,12 +195,13 @@
             @endphp
             <div class="d-flex align-items-center mb-1">
               <i class="ph-user-circle-gear text-warning me-2"></i>
-              <a href="{{ route('admin.ami.indicator', ['standard_id' => $ind->standard_id]) }}" class="text-body">
+              <a href="{{ route('admin.ami.indicator', ['standard_id' => $ind->standard_id]) }}"
+                 class="text-body">
                 {{ $snippet ?: 'Tanpa deskripsi' }}
               </a>
             </div>
           @empty
-            <div class="text-muted">Tidak ada.</div>
+            <div class="text-muted small">Tidak ada.</div>
           @endforelse
         </div>
       </div>
@@ -282,20 +213,28 @@
         <h5 class="mb-0">Aksi Cepat</h5>
       </div>
       <div class="list-group list-group-borderless">
-        <a class="list-group-item d-flex align-items-center" href="{{ route('admin.academic_config.index') }}">
-          <i class="ph-calendar-check me-2"></i> Set Tahun Akademik Aktif
+        <a class="list-group-item d-flex align-items-center"
+           href="{{ route('admin.academic_config.index') }}">
+          <i class="ph-calendar-check me-2"></i>
+          Set Tahun Akademik Aktif
           <span class="ms-auto text-muted">&rarr;</span>
         </a>
-        <a class="list-group-item d-flex align-items-center" href="{{ route('admin.ami.standard') }}">
-          <i class="ph-book-open me-2"></i> Kelola Standar
+        <a class="list-group-item d-flex align-items-center"
+           href="{{ route('admin.ami.standard') }}">
+          <i class="ph-book-open me-2"></i>
+          Kelola Standar
           <span class="ms-auto text-muted">&rarr;</span>
         </a>
-        <a class="list-group-item d-flex align-items-center" href="{{ route('admin.ami.indicator') }}">
-          <i class="ph-list-checks me-2"></i> Kelola Indikator & PIC
+        <a class="list-group-item d-flex align-items-center"
+           href="{{ route('admin.ami.indicator') }}">
+          <i class="ph-list-checks me-2"></i>
+          Kelola Indikator & PIC
           <span class="ms-auto text-muted">&rarr;</span>
         </a>
-        <a class="list-group-item d-flex align-items-center" href="{{ route('admin.roles.index') }}">
-          <i class="ph-identification-badge me-2"></i> Kelola Role
+        <a class="list-group-item d-flex align-items-center"
+           href="{{ route('admin.roles.index') }}">
+          <i class="ph-identification-badge me-2"></i>
+          Kelola Role
           <span class="ms-auto text-muted">&rarr;</span>
         </a>
       </div>
@@ -306,5 +245,17 @@
 @endsection
 
 @push('styles')
-<style>.letter-icon{width:18px;height:18px;display:block}</style>
+<style>
+  .letter-icon{
+    width:18px;
+    height:18px;
+    display:block;
+  }
+  .fed-card{
+    border:1px solid #e5e7eb !important;
+  }
+  .fed-card:hover{
+    background:#fafafa;
+  }
+</style>
 @endpush

@@ -21,7 +21,7 @@
     </div>
 
     {{-- Center: search (collapsible on mobile) --}}
-    <div class="navbar-collapse justify-content-center flex-lg-1 order-2 order-lg-1 collapse" id="navbar_search">
+    {{-- <div class="navbar-collapse justify-content-center flex-lg-1 order-2 order-lg-1 collapse" id="navbar_search">
       <div class="navbar-search flex-fill position-relative mt-2 mt-lg-0 mx-lg-3">
         <div class="form-control-feedback form-control-feedback-start flex-grow-1" data-color-theme="dark">
           <input type="text" class="form-control bg-transparent rounded-pill" placeholder="Search">
@@ -30,7 +30,7 @@
           </div>
         </div>
       </div>
-    </div>
+    </div> --}}
 
     {{-- Right cluster --}}
     <ul class="nav flex-row justify-content-end order-1 order-lg-2">

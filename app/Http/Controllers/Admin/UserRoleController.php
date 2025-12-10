@@ -19,37 +19,110 @@ class UserRoleController extends Controller
     {
         $q = trim((string) ($request->input('q', $request->input('search', ''))));
 
-        $users = User::query()
+        // filter tambahan
+        $filterAcademic = $request->input('filter_academic');
+        $filterRole = $request->input('filter_role');
+        $filterCategoryDetail = $request->input('filter_category_detail');
+        $filterHasAssignment = $request->input('filter_has_assignment'); // '1' = sudah di-assign, '0' = belum, null = semua
+
+        $usersQuery = User::query()
+            ->where('username', '!=', 'adminspm')
             ->when($q !== '', function ($qr) use ($q) {
                 $qr->where(function ($w) use ($q) {
                     $w->where('username', 'like', "%{$q}%")
                         ->orWhere('name', 'like', "%{$q}%")
                         ->orWhere('email', 'like', "%{$q}%");
                 });
-            })
-            ->with([
-                'roles' => function ($qr) {
-                    $qr->where('active', true)
-                        ->with([
-                            'role:id,name,category_id',
-                            'role.category:id,name',
-                            'academicConfig:id,academic_code',
-                            'categoryDetail:id,name',
-                        ])
-                        ->orderByDesc('created_at');
-                }
-            ])
-            ->orderBy('name')
-            ->paginate(20)
+            });
+
+        // urutan roles per user: terbaru dulu
+        $usersQuery->with([
+            'roles' => function ($qr) use ($filterAcademic, $filterRole, $filterCategoryDetail) {
+                $qr->where('active', true)
+                    ->when($filterAcademic, function ($w) use ($filterAcademic) {
+                        $w->where('academic_config_id', $filterAcademic);
+                    })
+                    ->when($filterCategoryDetail, function ($w) use ($filterCategoryDetail) {
+                        $w->where('category_detail_id', $filterCategoryDetail);
+                    })
+                    ->when($filterRole, function ($w) use ($filterRole) {
+                        $w->where('role_id', $filterRole);
+                    })
+                    ->with([
+                        'role:id,name,category_id',
+                        'role.category:id,name',
+                        'academicConfig:id,academic_code',
+                        'categoryDetail:id,name',
+                    ])
+                    ->orderByDesc('created_at');
+            }
+        ]);
+
+        // filter: user yang punya assignment / tidak punya
+        if ($filterHasAssignment === '1' || $filterAcademic || $filterRole || $filterCategoryDetail) {
+            // hanya user yang punya roles aktif (plus kombinasi filter lain)
+            $usersQuery->whereHas('roles', function ($qr) use ($filterAcademic, $filterRole, $filterCategoryDetail) {
+                $qr->where('active', true)
+                    ->when($filterAcademic, function ($w) use ($filterAcademic) {
+                        $w->where('academic_config_id', $filterAcademic);
+                    })
+                    ->when($filterCategoryDetail, function ($w) use ($filterCategoryDetail) {
+                        $w->where('category_detail_id', $filterCategoryDetail);
+                    })
+                    ->when($filterRole, function ($w) use ($filterRole) {
+                        $w->where('role_id', $filterRole);
+                    });
+            });
+        } elseif ($filterHasAssignment === '0') {
+            // hanya user yang BELUM punya roles aktif
+            $usersQuery->whereDoesntHave('roles', function ($qr) {
+                $qr->where('active', true);
+            });
+        }
+
+        // urutkan user berdasarkan waktu terakhir di-assign (descending)
+        $usersQuery->withMax([
+            'roles as last_assigned_at' => function ($qr) use ($filterAcademic, $filterRole, $filterCategoryDetail) {
+                $qr->where('active', true)
+                    ->when($filterAcademic, function ($w) use ($filterAcademic) {
+                        $w->where('academic_config_id', $filterAcademic);
+                    })
+                    ->when($filterCategoryDetail, function ($w) use ($filterCategoryDetail) {
+                        $w->where('category_detail_id', $filterCategoryDetail);
+                    })
+                    ->when($filterRole, function ($w) use ($filterRole) {
+                        $w->where('role_id', $filterRole);
+                    });
+            }
+        ], 'created_at');
+
+        $users = $usersQuery
+            ->orderByDesc('last_assigned_at') // paling baru di-assign muncul di atas
+            ->orderBy('name')                 // fallback kalau null / sama
+            ->paginate(10)
             ->withQueryString();
 
         $roles = Role::with('category:id,name')
             ->orderBy('name')
             ->get(['id', 'name', 'category_id']);
-        $academics = AcademicConfig::orderBy('academic_code', 'desc')->get(['id', 'academic_code']);
-        $categoryDetail = RefCategoryDetail::orderBy('name')->get(['id', 'name']);
 
-        return view('admin.roles.index', compact('users', 'q', 'roles', 'academics', 'categoryDetail'));
+        $academics = AcademicConfig::orderBy('academic_code', 'desc')
+            ->get(['id', 'academic_code']);
+
+        $categoryDetail = RefCategoryDetail::orderBy('name')
+            ->get(['id', 'name']);
+
+        return view('admin.roles.index', compact(
+            'users',
+            'q',
+            'roles',
+            'academics',
+            'categoryDetail',
+            'filterAcademic',
+            'filterRole',
+            'filterCategoryDetail',
+            'filterHasAssignment'
+        ));
     }
 
     public function assign(Request $request)
@@ -94,7 +167,6 @@ class UserRoleController extends Controller
 
             foreach ($cDetailIds as $cdId) {
                 foreach ($roles as $rid) {
-                    // Pastikan isi kolom id saat create
                     $ur = UserRole::firstOrNew([
                         'cis_user_id' => $cis,
                         'academic_config_id' => $acId,

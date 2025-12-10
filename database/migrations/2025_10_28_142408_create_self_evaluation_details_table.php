@@ -26,8 +26,8 @@ return new class extends Migration
             $table->text('contributing_factors')->nullable();     // faktor_penghambat_pendukung
 
             // Audit trail
-            $table->string('created_by')->nullable();
-            $table->string('updated_by')->nullable();
+            $table->unsignedBigInteger('created_by')->nullable();
+            $table->unsignedBigInteger('updated_by')->nullable();
 
             $table->timestamps();
             $table->boolean('active')->default(true);
@@ -55,12 +55,12 @@ return new class extends Migration
 
             $table->foreign('created_by')
                 ->references('id')
-                ->on('user_roles')
+                ->on('users')
                 ->nullOnDelete();
 
             $table->foreign('updated_by')
                 ->references('id')
-                ->on('user_roles')
+                ->on('users')
                 ->nullOnDelete();
         });
     }

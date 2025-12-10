@@ -1,5 +1,5 @@
 @php
-  $homeUrl = route('auditee.dashboard'); // ganti ke route('dashboard') kalau ada
+  $homeUrl = route('auditor.dashboard'); // ganti ke route('dashboard') kalau ada
 @endphp
 
 <div class="navbar navbar-dark navbar-expand-lg navbar-static border-bottom border-bottom-white border-opacity-10">
@@ -20,17 +20,6 @@
       </a>
     </div>
 
-    {{-- Center: search (collapsible on mobile) --}}
-    {{-- <div class="navbar-collapse justify-content-center flex-lg-1 order-2 order-lg-1 collapse" id="navbar_search">
-      <div class="navbar-search flex-fill position-relative mt-2 mt-lg-0 mx-lg-3">
-        <div class="form-control-feedback form-control-feedback-start flex-grow-1" data-color-theme="dark">
-          <input type="text" class="form-control bg-transparent rounded-pill" placeholder="Search">
-          <div class="form-control-feedback-icon">
-            <i class="ph-magnifying-glass"></i>
-          </div>
-        </div>
-      </div>
-    </div> --}}
 
     {{-- Right cluster --}}
     <ul class="nav flex-row justify-content-end order-1 order-lg-2">

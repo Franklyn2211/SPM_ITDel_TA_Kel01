@@ -21,6 +21,7 @@
           </button>
         </form>
 
+        {{-- Search desktop --}}
         <form class="d-none d-lg-block" method="GET" action="{{ url()->current() }}">
           <div class="input-group input-group-sm">
             <input type="text" class="form-control" name="q" placeholder="Cari nama/username/email..." value="{{ request('q', request('search')) }}">
@@ -71,16 +72,87 @@
   @endif
 
   <div class="card">
-    <div class="card-header d-flex align-items-center">
+    <div class="card-header d-flex flex-column flex-lg-row align-items-lg-center gap-2">
       <h5 class="mb-0">Daftar Users</h5>
 
-      <form class="ms-auto d-lg-none" method="GET" action="{{ url()->current() }}">
+      {{-- Search mobile --}}
+      <form class="ms-lg-auto d-lg-none w-100" method="GET" action="{{ url()->current() }}">
         <div class="input-group input-group-sm" style="max-width:360px;">
           <input type="text" class="form-control" name="q" placeholder="Cari nama/username/email..." value="{{ request('q', request('search')) }}">
           @if(request()->filled('q') || request()->filled('search'))
             <a href="{{ url()->current() }}" class="btn btn-outline-secondary">Reset</a>
           @endif
           <button class="btn btn-primary" type="submit"><i class="ph-magnifying-glass"></i></button>
+        </div>
+      </form>
+
+      {{-- Filter form --}}
+      <form method="GET" action="{{ url()->current() }}" class="w-100 mt-2 mt-lg-0 ms-lg-auto">
+        <div class="row g-2 align-items-end">
+          <div class="col-12 col-sm-6 col-lg-3">
+            <label class="form-label mb-1">Tahun Akademik</label>
+            <select name="filter_academic" class="form-select form-select-sm">
+              <option value="">Semua</option>
+              @foreach($academics as $ac)
+                <option value="{{ $ac->id }}" @selected(request('filter_academic') == $ac->id)>
+                  {{ $ac->academic_code }}
+                </option>
+              @endforeach
+            </select>
+          </div>
+
+          <div class="col-12 col-sm-6 col-lg-3">
+            <label class="form-label mb-1">Role</label>
+            <select name="filter_role" class="form-select form-select-sm">
+              <option value="">Semua</option>
+              @foreach($roles as $r)
+                @php $cat = $r->category?->name; @endphp
+                <option value="{{ $r->id }}" @selected(request('filter_role') == $r->id)>
+                  {{ $r->name }}@if($cat) ({{ $cat }}) @endif
+                </option>
+              @endforeach
+            </select>
+          </div>
+
+          <div class="col-12 col-sm-6 col-lg-3">
+            <label class="form-label mb-1">Detail Kategori</label>
+            <select name="filter_category_detail" class="form-select form-select-sm">
+              <option value="">Semua</option>
+              @foreach($categoryDetail as $cd)
+                <option value="{{ $cd->id }}" @selected(request('filter_category_detail') == $cd->id)>
+                  {{ $cd->name }}
+                </option>
+              @endforeach
+            </select>
+          </div>
+
+          <div class="col-12 col-sm-6 col-lg-2">
+            <label class="form-label mb-1">Status Assignment</label>
+            <select name="filter_has_assignment" class="form-select form-select-sm">
+              <option value="" @selected(request('filter_has_assignment') === null)>Semua</option>
+              <option value="1" @selected(request('filter_has_assignment') === '1')>Sudah di-assign</option>
+              <option value="0" @selected(request('filter_has_assignment') === '0')>Belum di-assign</option>
+            </select>
+          </div>
+
+          <div class="col-12 col-lg-1 d-flex gap-1 justify-content-lg-end">
+            {{-- keep search keyword kalau ada --}}
+            <input type="hidden" name="q" value="{{ request('q', request('search')) }}">
+            <button type="submit" class="btn btn-primary btn-sm w-100">
+              <i class="ph-funnel me-1"></i> Filter
+            </button>
+
+            @if(
+              request()->filled('filter_academic')
+              || request()->filled('filter_role')
+              || request()->filled('filter_category_detail')
+              || request()->has('filter_has_assignment')
+            )
+              <a href="{{ url()->current() }}" class="btn btn-outline-secondary btn-sm w-100">
+                Reset
+              </a>
+            @endif
+          </div>
         </div>
       </form>
     </div>
@@ -90,9 +162,7 @@
         <thead class="table-light">
           <tr>
             <th style="width:50px;">No</th>
-            <th>Username</th>
             <th>Nama</th>
-            <th>Email</th>
             <th>Role & Detail Kategori</th>
             <th class="text-center" style="width:120px;">Aksi</th>
           </tr>
@@ -100,14 +170,12 @@
         <tbody>
         @forelse ($users as $i => $u)
           @php
-            // Kelompokkan per TA dan rapikan agar tidak duplikat di tampilan
             $grouped = $u->roles
               ->groupBy('academic_config_id')
               ->map(function($items){
                   $first = $items->first();
                   $ac    = $first?->academicConfig;
 
-                  // role unik berdasarkan role_id
                   $uniqueRoles = $items->unique('role_id');
 
                   return [
@@ -120,7 +188,6 @@
               })
               ->values();
 
-            // Peta untuk modal: key = academic_config_id
             $assignmentMap = $u->roles
               ->groupBy('academic_config_id')
               ->mapWithKeys(function($items, $acId){
@@ -138,9 +205,7 @@
 
           <tr>
             <td class="text-center">{{ ($users->firstItem() ?? 0) + $i }}</td>
-            <td><code>{{ $u->username }}</code></td>
             <td>{{ $u->name }}</td>
-            <td>{{ $u->email }}</td>
             <td>
               @if($grouped->count())
                 <div class="d-flex flex-column gap-1">
@@ -169,7 +234,6 @@
                 data-bs-toggle="modal"
                 data-bs-target="#modalAssign"
                 data-cis="{{ $u->cis_user_id }}"
-                {{-- kirim JSON yang valid dan aman --}}
                 data-assign='@json($assignmentMap, JSON_HEX_APOS|JSON_HEX_QUOT|JSON_HEX_AMP)'
               >
                 {{ $grouped->count() ? 'Ubah' : 'Assign' }}
@@ -177,7 +241,7 @@
             </td>
           </tr>
         @empty
-          <tr><td colspan="6" class="text-center text-muted">Belum ada data user</td></tr>
+           <tr><td colspan="4" class="text-center text-muted">Belum ada data user</td></tr>
         @endforelse
         </tbody>
       </table>
@@ -188,7 +252,7 @@
       <span class="text-muted me-auto">
         Showing {{ $users->firstItem() }} to {{ $users->lastItem() }} of {{ $users->total() }} entries
       </span>
-      <div>{{ $users->onEachSide(1)->appends(request()->only('q','search'))->links() }}</div>
+      <div>{{ $users->onEachSide(1)->appends(request()->only('q','search','filter_academic','filter_role','filter_category_detail','filter_has_assignment'))->links() }}</div>
     </div>
     @endif
   </div>
@@ -287,17 +351,15 @@
     let assignMap = {};
     try { assignMap = JSON.parse(mapStr); } catch(e) { assignMap = {}; }
 
-    // reset
     cisInput.value = cis;
     acSel.value = '';
     setMultiSelect(cdSel, []);
     setMultiSelect(roleSel, []);
     syncSelect2();
 
-    // pilih default: kalau ada 1 TA, pakai itu; kalau >1, pakai TA pertama
     const acIds = Object.keys(assignMap || {});
     if (acIds.length >= 1) {
-      const defaultAcId = acIds[0]; // aman dan simpel
+      const defaultAcId = acIds[0];
       acSel.value = defaultAcId;
 
       const entry = assignMap[defaultAcId] || { cdetail_ids:[], role_ids:[] };
@@ -311,7 +373,6 @@
       }
     }
 
-    // ganti TA -> sinkron nilai
     acSel.onchange = function () {
       const acId = acSel.value || '';
       const entry = (assignMap && assignMap[acId]) ? assignMap[acId] : { cdetail_ids:[], role_ids:[] };

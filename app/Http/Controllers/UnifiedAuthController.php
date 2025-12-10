@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AcademicConfig;
+use App\Models\SelfEvaluationForm;
 use App\Models\User;
 use App\Support\CisClient;
 use Illuminate\Http\Request;
@@ -130,35 +132,76 @@ class UnifiedAuthController extends Controller
         return redirect()->route('login')->with('status', 'Logout berhasil.');
     }
 
-protected function redirectBasedOnRole(User $user)
-{
-    if ($user->username === 'adminspm') {
-        return redirect()->route('admin.dashboard');
+    protected function redirectBasedOnRole(User $user)
+    {
+        if ($user->username === 'adminspm') {
+            return redirect()->route('admin.dashboard');
+        }
+
+        // daftar role yang termasuk auditee
+        $auditeeRoles = ['Dekan', 'Ketua Program Studi', 'Ketua PPKHA', 'SPM']; // tambah sesuai kebutuhan
+        $auditorRoles = ['Auditor'];
+
+        // VERSI SPATIE (paling simpel)
+        if (method_exists($user, 'hasAnyRole')) {
+
+            // prioritas: auditee dulu
+            if ($user->hasAnyRole($auditeeRoles)) {
+                return redirect()->route('auditee.dashboard');
+            }
+
+            // lalu auditor
+            if ($user->hasAnyRole($auditorRoles)) {
+                return redirect()->route('auditor.dashboard');
+            }
+        }
+
+        // VERSI CUSTOM RELATION (pakai pivot user_roles)
+        $punyaAuditeeAktif = $user->roles()
+            ->where('active', true)
+            ->whereHas('role', fn($q) => $q->whereIn('name', $auditeeRoles))
+            ->exists();
+
+        if ($punyaAuditeeAktif) {
+            return redirect()->route('auditee.dashboard');
+        }
+
+        $punyaAuditorAktif = $user->roles()
+            ->where('active', true)
+            ->whereHas('role', fn($q) => $q->whereIn('name', $auditorRoles))
+            ->exists();
+
+        if ($punyaAuditorAktif) {
+            return redirect()->route('auditor.dashboard');
+        }
+
+        // 🔥 Fallback: tidak punya role aktif,
+        // tapi mungkin terdaftar sebagai anggota auditee di FED tahun aktif.
+        $activeAcademicId = AcademicConfig::where('active', true)->value('id');
+
+        if ($activeAcademicId) {
+            $isAuditeeMember = SelfEvaluationForm::where('academic_config_id', $activeAcademicId)
+                ->where(function ($q) use ($user) {
+                    $q->where('member_auditee_1_user_id', $user->id)
+                    ->orWhere('member_auditee_2_user_id', $user->id)
+                    ->orWhere('member_auditee_3_user_id', $user->id);
+                })
+                ->exists();
+
+            if ($isAuditeeMember) {
+                // anggap dia auditee walau belum di-manage role oleh admin
+                return redirect()->route('auditee.dashboard');
+            }
+        }
+
+        // kalau sampai sini, benar-benar tidak punya role dan bukan anggota FED mana pun → tendang
+        Auth::logout();
+        session()->forget(['cis_token','cis_profile']);
+
+        return redirect()
+            ->route('login')
+            ->withErrors('Akun belum memiliki role aktif dan belum terdaftar sebagai anggota auditee. Hubungi admin.');
     }
 
-    // daftar role yang termasuk auditee
-    $auditeeRoles = ['Dekan', 'Ketua Program Studi', 'Ketua PPKHA']; // tambah sesuai kebutuhan
-
-    // VERSI SPATIE (paling simpel)
-    if (method_exists($user, 'hasAnyRole') && $user->hasAnyRole($auditeeRoles)) {
-        return redirect()->route('auditee.dashboard');
-    }
-
-    // VERSI CUSTOM RELATION (kalau kamu memang pakai pivot active)
-    $punyaAuditeeAktif = $user->roles()
-        ->where('active', true)
-        ->whereHas('role', fn($q) => $q->whereIn('name', $auditeeRoles))
-        ->exists();
-
-    if ($punyaAuditeeAktif) {
-        return redirect()->route('auditee.dashboard');
-    }
-
-    Auth::logout();
-    session()->forget(['cis_token','cis_profile']);
-    return redirect()
-        ->route('login')
-        ->withErrors('Akun belum memiliki role aktif. Hubungi admin.');
-}
 
 }

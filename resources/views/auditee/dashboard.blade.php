@@ -19,18 +19,6 @@
         <a href="#" class="d-flex align-items-center text-body py-2 me-lg-3">
           <i class="ph-lifebuoy me-2"></i> Support
         </a>
-
-        <div class="dropdown">
-          <a href="#" class="d-flex align-items-center text-body dropdown-toggle py-2" data-bs-toggle="dropdown">
-            <i class="ph-gear me-2"></i> <span>Settings</span>
-          </a>
-          <div class="dropdown-menu dropdown-menu-end">
-            <a href="#" class="dropdown-item"><i class="ph-shield-warning me-2"></i> Account security</a>
-            <a href="#" class="dropdown-item"><i class="ph-lock-key me-2"></i> Privacy</a>
-            <div class="dropdown-divider"></div>
-            <a href="#" class="dropdown-item"><i class="ph-gear me-2"></i> All settings</a>
-          </div>
-        </div>
       </div>
     </div>
   </div>
@@ -39,50 +27,73 @@
     <div class="d-flex align-items-center">
       <div class="breadcrumb py-2">
         <a href="{{ route('auditee.dashboard') }}" class="breadcrumb-item"><i class="ph-house"></i></a>
-        <a href="#" class="breadcrumb-item">Home</a>
         <span class="breadcrumb-item active">Dashboard</span>
       </div>
+      @if($academic)
+        <div class="ms-auto">
+          <span class="badge bg-primary">
+            TA Aktif: {{ $academic->name ?? ($academic->tahun ?? '-') }}
+          </span>
+        </div>
+      @endif
     </div>
   </div>
 </div>
 @endsection
 
 @section('content')
+@php
+  $formStatusName = $form?->status?->name ?? 'Draft';
+  $isLocked = $form && $formStatusName === 'Dikirim';
+@endphp
+
 <div class="row">
   <div class="col-xl-8">
 
-    <div class="card">
+    {{-- CARD FED UTAMA --}}
+    <div class="card mb-3">
       <div class="card-header d-flex align-items-center">
-        <h5 class="mb-0">
-          Formulir Evaluasi Diri (AMI)
+        <div>
+          <h5 class="mb-0">Formulir Evaluasi Diri (AMI)</h5>
           @if($academic)
-            <span class="text-muted fw-normal">— {{ $academic->name ?? ($academic->tahun ?? 'Tahun Akademik Aktif') }}</span>
+            <div class="text-muted fs-sm">
+              {{ $academic->name ?? ($academic->tahun ?? 'Tahun Akademik Aktif') }}
+              @if($isMemberForm)
+                · <span class="badge bg-info bg-opacity-10 text-info">Anggota Auditee</span>
+              @endif
+            </div>
           @endif
-        </h5>
-        <div class="ms-auto">
+        </div>
+
+        <div class="ms-auto text-end">
           @if($form)
             @php
-              $statusName = $form->status->name ?? 'Draft';
-              $badgeClass = $statusName === 'Dikirim' ? 'bg-success' : 'bg-secondary';
+              $badgeClass = $formStatusName === 'Dikirim'
+                ? 'bg-success'
+                : ($formStatusName === 'Draft' ? 'bg-secondary' : 'bg-primary');
             @endphp
-            <span class="badge {{ $badgeClass }} rounded-pill">{{ $statusName }}</span>
+            <span class="badge {{ $badgeClass }} rounded-pill">{{ $formStatusName }}</span>
           @else
-            <span class="badge bg-warning text-dark rounded-pill">Belum Ada</span>
+            <span class="badge bg-warning text-dark rounded-pill">Belum Ada Form</span>
           @endif
         </div>
       </div>
 
       <div class="card-body">
         @if(!$academic)
-          <div class="alert alert-warning">
-            Tahun akademik aktif belum diset. Silakan hubungi admin.
+          <div class="alert alert-warning mb-0">
+            Tahun akademik aktif belum diset. Silakan hubungi admin SPM.
           </div>
         @else
           @if($form)
-            <div class="d-flex align-items-center mb-3">
-              <div class="me-3">
+            {{-- PROGRESS --}}
+            <div class="d-flex flex-column flex-md-row align-items-md-center mb-3 gap-2">
+              <div class="me-md-3">
                 <div class="fw-semibold">Progress Pengisian</div>
-                <div class="text-muted fs-sm">{{ $progress['terisi'] ?? 0 }} / {{ $progress['total'] ?? 0 }} butir ({{ $progress['percent'] ?? 0 }}%)</div>
+                <div class="text-muted fs-sm">
+                  {{ $progress['terisi'] ?? 0 }} / {{ $progress['total'] ?? 0 }} butir
+                  ({{ $progress['percent'] ?? 0 }}%)
+                </div>
               </div>
               <div class="flex-grow-1">
                 <div class="progress" style="height:10px;">
@@ -91,38 +102,42 @@
               </div>
             </div>
 
-            @if(($form->status->name ?? '') === 'Dikirim')
-              <div class="alert alert-success py-2">
+            {{-- ALERT STATUS --}}
+            @if($isLocked)
+              <div class="alert alert-success py-2 mb-3">
                 <i class="ph-check-circle me-2"></i>
                 Form telah <strong>dikirim</strong>
                 @if($form->submitted_at)
                   pada {{ \Illuminate\Support\Carbon::parse($form->submitted_at)->translatedFormat('d M Y') }}
                 @endif
-                .
+                . Pengisian sudah terkunci.
               </div>
             @else
-              <div class="alert alert-warning py-2">
+              <div class="alert alert-warning py-2 mb-3">
                 <i class="ph-warning me-2"></i>
-                Harap lengkapi seluruh butir standar lalu tekan <strong>Submit</strong>.
+                Lengkapi seluruh butir, lalu tekan <strong>Submit</strong> setelah yakin semua jawaban sudah benar.
               </div>
             @endif
           @else
-            <div class="alert alert-info d-flex align-items-center">
+            <div class="alert alert-info d-flex align-items-center mb-3">
               <i class="ph-info me-2"></i>
-              Belum ada Form Evaluasi Diri untuk tahun/prodi ini. Silakan buka halaman FED untuk membuatnya.
+              Belum ada Form Evaluasi Diri untuk tahun/kategori ini. Buka halaman FED untuk membuat form baru.
             </div>
           @endif
 
-          <div class="d-flex flex-wrap gap-2 mt-2">
+          {{-- AKSI --}}
+          <div class="d-flex flex-wrap gap-2 mt-1">
             <a href="{{ route('auditee.fed.index') }}" class="btn btn-primary">
               <i class="ph-note-pencil me-2"></i> Buka Pengisian FED
             </a>
 
-            @if($form)
-              <form method="post" action="{{ route('auditee.fed.submit', $form) }}"
+            @if($form && !$isMemberForm)
+              <form method="post"
+                    action="{{ route('auditee.fed.submit', $form) }}"
                     onsubmit="return confirm('Kirim Form Evaluasi Diri sekarang? Setelah dikirim tidak dapat diedit.');">
                 @csrf
-                <button class="btn btn-success" @if(!$canSubmit) disabled @endif>
+                <button class="btn btn-success"
+                        @if(!$canSubmit || $isLocked) disabled @endif>
                   <i class="ph-paper-plane-tilt me-2"></i> Submit
                 </button>
               </form>
@@ -130,164 +145,206 @@
           </div>
 
           @if($form && $lastUpdatedAt)
-            <div class="text-muted fs-sm mt-2">
-              Terakhir diperbarui: {{ \Illuminate\Support\Carbon::parse($lastUpdatedAt)->diffForHumans() }}
+            <div class="text-muted fs-sm mt-3">
+              Terakhir diperbarui:
+              {{ \Illuminate\Support\Carbon::parse($lastUpdatedAt)->diffForHumans() }}
             </div>
           @endif
         @endif
       </div>
     </div>
 
-    <div class="card">
+    {{-- BUTIR BELUM DIISI (dibatasi, indikator lebih menonjol) --}}
+    <div class="card mb-3">
       <div class="card-header d-flex align-items-center">
         <h5 class="mb-0">Butir Belum Diisi</h5>
-        @if($form)
-          <span class="badge bg-warning text-dark rounded-pill ms-auto">
-            {{ max(($progress['total'] ?? 0) - ($progress['terisi'] ?? 0), 0) }}
-          </span>
-        @endif
+        <div class="ms-auto d-flex align-items-center gap-2">
+          @if($form)
+            <span class="badge bg-warning text-dark rounded-pill">
+              {{ max(($progress['total'] ?? 0) - ($progress['terisi'] ?? 0), 0) }}
+            </span>
+          @endif
+          <a href="{{ route('auditee.fed.index') }}" class="btn btn-sm btn-outline-primary">
+            Buka FED
+          </a>
+        </div>
       </div>
       <div class="table-responsive">
-        <table class="table align-middle">
+        <table class="table align-middle mb-0">
           <thead>
             <tr>
-              <th style="width:60px">No</th>
-              <th>Standar & Butir</th>
-              <th class="text-end" style="width:120px">Aksi</th>
+              <th style="width:60px" class="text-center">No</th>
+              <th>Indikator & Standar</th>
             </tr>
           </thead>
           <tbody>
             @if(!$form)
-              <tr><td colspan="3" class="text-muted text-center">Belum ada form. Buka halaman FED untuk membuat.</td></tr>
+              <tr>
+                <td colspan="2" class="text-muted text-center">
+                  Belum ada form. Buka halaman FED untuk membuat.
+                </td>
+              </tr>
             @else
               @forelse($unfilled as $i => $d)
                 @php
                   $stdName   = optional($d->indicator?->standard)->name ?? '-';
                   $descPlain = strip_tags($d->indicator->description ?? '');
-                  $shortDesc = \Illuminate\Support\Str::limit($descPlain, 140);
+                  $shortDesc = \Illuminate\Support\Str::limit($descPlain, 150);
                 @endphp
                 <tr id="unfilled-{{ $d->id }}">
-                  <td>{{ $i+1 }}</td>
+                  <td class="text-center">{{ $i + 1 }}</td>
                   <td>
-                    <div class="fw-semibold text-primary">{{ $stdName }}</div>
-                    <div class="text-muted fs-sm">
+                    <div>
                       {{ $shortDesc }}
-                      @if(mb_strlen($descPlain) > 140)
+                      @if(mb_strlen($descPlain) > 150)
                         <a href="{{ route('auditee.fed.index') }}#detail-{{ $d->id }}" class="ms-1">Lihat selengkapnya</a>
                       @endif
                     </div>
-                  </td>
-                  <td class="text-end">
-                    <a href="{{ route('auditee.fed.index') }}#detail-{{ $d->id }}" class="btn btn-sm btn-outline-primary">
-                      <i class="ph-pencil me-1"></i> Isi
-                    </a>
+                    <div class="text-muted fs-sm">
+                      Standar: {{ $stdName }}
+                    </div>
                   </td>
                 </tr>
               @empty
-                <tr><td colspan="3" class="text-success text-center">Semua butir telah diisi</td></tr>
+                <tr>
+                  <td colspan="2" class="text-success text-center">
+                    Semua butir telah diisi.
+                  </td>
+                </tr>
               @endforelse
             @endif
           </tbody>
         </table>
       </div>
+      @if($form && $unfilled->count() > 0)
+        <div class="card-footer text-muted fs-sm">
+          Menampilkan maksimal 5 butir yang belum diisi. Lengkapnya dapat dilihat pada halaman FED.
+        </div>
+      @endif
     </div>
 
+    {{-- AKTIVITAS TERAKHIR (dibatasi & indikator ditekankan) --}}
     <div class="card">
       <div class="card-header d-flex align-items-center">
         <h5 class="mb-0">Aktivitas Terakhir</h5>
+        <div class="ms-auto">
+          <a href="{{ route('auditee.fed.index') }}" class="btn btn-sm btn-outline-primary">
+            Buka FED
+          </a>
+        </div>
       </div>
       <div class="table-responsive">
-        <table class="table text-nowrap">
+        <table class="table text-nowrap mb-0">
           <thead>
             <tr>
-              <th style="width:60px">#</th>
-              <th>Butir</th>
-              <th>Diubah oleh</th>
+              <th style="width:60px" class="text-center">No</th>
+              <th>Indikator & Standar</th>
               <th>Waktu</th>
-              <th class="text-end" style="width:120px">Aksi</th>
             </tr>
           </thead>
           <tbody>
             @if(!$form)
-              <tr><td colspan="5" class="text-muted text-center">Tidak ada aktivitas.</td></tr>
+              <tr>
+                <td colspan="4" class="text-muted text-center">
+                  Tidak ada aktivitas.
+                </td>
+              </tr>
             @else
               @forelse($recent as $i => $d)
                 @php
                   $stdName   = optional($d->indicator?->standard)->name ?? '-';
                   $descPlain = strip_tags($d->indicator->description ?? '');
-                  $shortDesc = \Illuminate\Support\Str::limit($descPlain, 120);
+                  $shortDesc = \Illuminate\Support\Str::limit($descPlain, 140);
                   $k         = $d->standardAchievement->name ?? '—';
                   $hasil     = trim((string)($d->result ?? ''));
                 @endphp
                 <tr id="recent-{{ $d->id }}">
-                  <td>{{ $i+1 }}</td>
+                  <td class="text-center">{{ $i + 1 }}</td>
                   <td>
-                    <div class="fw-semibold text-primary">{{ $stdName }}</div>
-                    <div class="text-muted fs-sm">
+                    <div>
                       {{ $shortDesc }}
-                      @if(mb_strlen($descPlain) > 120)
+                      @if(mb_strlen($descPlain) > 140)
                         <a href="{{ route('auditee.fed.index') }}#detail-{{ $d->id }}" class="ms-1">Lihat selengkapnya</a>
                       @endif
                     </div>
+                    <div class="text-muted fs-sm">
+                      Standar: {{ $stdName }}
+                    </div>
                     <div class="text-muted fs-sm mt-1">
-                      Ketercapaian: <span class="fw-semibold">{{ $k }}</span>
-                      @if($hasil) · <span class="fst-italic">"{{ \Illuminate\Support\Str::limit($hasil, 60) }}"</span> @endif
+                      Diubah oleh:
+                      <span class="fw-semibold">{{ $d->updater_name ?? $d->updater_username ?? '—' }}</span>
                     </div>
                   </td>
-                  <td>{{ $d->updater_name ?? $d->updater_username ?? '—' }}</td>
                   <td>{{ \Illuminate\Support\Carbon::parse($d->updated_at)->diffForHumans() }}</td>
-                  <td class="text-end">
-                    <a href="{{ route('auditee.fed.index') }}#detail-{{ $d->id }}" class="btn btn-sm btn-outline-secondary">
-                      <i class="ph-eye me-1"></i> Lihat
-                    </a>
-                  </td>
                 </tr>
               @empty
-                <tr><td colspan="5" class="text-muted text-center">Belum ada aktivitas.</td></tr>
+                <tr>
+                  <td colspan="4" class="text-muted text-center">
+                    Belum ada aktivitas.
+                  </td>
+                </tr>
               @endforelse
             @endif
           </tbody>
         </table>
       </div>
+      @if($form && $recent->count() > 0)
+        <div class="card-footer text-muted fs-sm">
+          Menampilkan 5 aktivitas terakhir yang berkaitan dengan FED.
+        </div>
+      @endif
     </div>
 
   </div>
 
+  {{-- KOLOM KANAN --}}
   <div class="col-xl-4">
-    <div class="card">
+    {{-- STATISTIK KETERCAPAIAN --}}
+    <div class="card mb-3">
       <div class="card-header d-flex align-items-center">
         <h5 class="mb-0">Statistik Ketercapaian</h5>
       </div>
       <div class="card-body">
         @if(!$form)
-          <div class="text-muted">Belum ada data.</div>
+          <div class="text-muted">Belum ada data ketercapaian.</div>
         @else
           <ul class="list-unstyled mb-0">
             <li class="d-flex justify-content-between align-items-center py-1">
               <span>Melampaui</span>
-              <span class="badge bg-success bg-opacity-10 text-success">{{ $statsKetercapaian['Melampaui'] }}</span>
+              <span class="badge bg-success bg-opacity-10 text-success">
+                {{ $statsKetercapaian['Melampaui'] }}
+              </span>
             </li>
             <li class="d-flex justify-content-between align-items-center py-1">
               <span>Mencapai</span>
-              <span class="badge bg-primary bg-opacity-10 text-primary">{{ $statsKetercapaian['Mencapai'] }}</span>
+              <span class="badge bg-primary bg-opacity-10 text-primary">
+                {{ $statsKetercapaian['Mencapai'] }}
+              </span>
             </li>
             <li class="d-flex justify-content-between align-items-center py-1">
               <span>Tidak Mencapai</span>
-              <span class="badge bg-warning text-dark">{{ $statsKetercapaian['Tidak Mencapai'] }}</span>
+              <span class="badge bg-warning text-dark">
+                {{ $statsKetercapaian['Tidak Mencapai'] }}
+              </span>
             </li>
             <li class="d-flex justify-content-between align-items-center py-1">
               <span>Menyimpang</span>
-              <span class="badge bg-danger bg-opacity-10 text-danger">{{ $statsKetercapaian['Menyimpang'] }}</span>
+              <span class="badge bg-danger bg-opacity-10 text-danger">
+                {{ $statsKetercapaian['Menyimpang'] }}
+              </span>
             </li>
             <li class="d-flex justify-content-between align-items-center py-1">
               <span>Kosong</span>
-              <span class="badge bg-secondary">{{ $statsKetercapaian['Kosong'] }}</span>
+              <span class="badge bg-secondary">
+                {{ $statsKetercapaian['Kosong'] }}
+              </span>
             </li>
           </ul>
         @endif
       </div>
     </div>
 
+    {{-- NAVIGASI CEPAT --}}
     <div class="card">
       <div class="card-header d-flex align-items-center">
         <h5 class="mb-0">Navigasi Cepat</h5>
@@ -297,12 +354,6 @@
           <i class="ph-note-pencil me-2"></i> Pengisian FED
           <span class="ms-auto text-muted">&rarr;</span>
         </a>
-        <a href="#" class="list-group-item list-group-item-action d-flex align-items-center disabled">
-          <i class="ph-file-pdf me-2"></i> Cetak Laporan (segera)
-        </a>
-        <a href="#" class="list-group-item list-group-item-action d-flex align-items-center disabled">
-          <i class="ph-book-open me-2"></i> Panduan FED (segera)
-        </a>
       </div>
     </div>
 
@@ -311,9 +362,15 @@
 @endsection
 
 @push('styles')
-<style>.letter-icon { width: 18px; height: 18px; display:block; }</style>
+<style>
+  .letter-icon {
+    width: 18px;
+    height: 18px;
+    display: block;
+  }
+</style>
 @endpush
 
 @push('scripts')
-{{-- no extra scripts here --}}
+{{-- no extra scripts --}}
 @endpush

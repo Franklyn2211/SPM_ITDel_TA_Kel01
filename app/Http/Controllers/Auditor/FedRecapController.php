@@ -1,98 +1,54 @@
 <?php
 
-namespace App\Http\Controllers\Admin;
+namespace App\Http\Controllers\Auditor;
 
 use App\Http\Controllers\Controller;
 use App\Models\AcademicConfig;
-use App\Models\AmiStandard;
 use App\Models\AmiStandardIndicator;
 use App\Models\AmiStandardIndicatorPic;
 use App\Models\SelfEvaluationForm;
 use App\Models\SelfEvaluationDetail;
 use App\Models\StandardAchievement;
 use App\Models\RefCategoryDetail;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
+use Illuminate\Pagination\LengthAwarePaginator;
 
-class DashboardController extends Controller
+class FedRecapController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        // =======================
-        //  TA AKTIF
-        // =======================
         $activeAc = AcademicConfig::query()
             ->where('active', 1)
             ->first();
 
+        // Kalau TA aktif belum diset, balikin paginator kosong
         if (!$activeAc) {
-            $statsK = [
-                'Melampaui' => 0,
-                'Mencapai' => 0,
-                'Tidak Mencapai' => 0,
-                'Menyimpang' => 0,
-                'Kosong' => 0,
-            ];
+            $emptyPaginator = new LengthAwarePaginator([], 0, 10, 1, [
+                'path' => $request->url(),
+                'query' => $request->query(),
+            ]);
 
-            return view('admin.dashboard', [
-                'activeAc' => null,
-                'standardsNoIndicators' => collect(),
-                'indicatorsNoPic' => collect(),
-                'statsK' => $statsK,
-                'picCoverage' => collect(),
-                'facultyRecap' => [],
-                'prodiRecap' => [],
-                'unitRecap' => [],
-                'indicatorSummary' => [
-                    'faculty' => 0,
-                    'prodi' => 0,
-                    'unit' => 0,
-                    'total' => 0,
-                ],
-                'fedSample' => [],
+            return view('auditor.fed_rekap.index', [
+                'title' => 'Rekap Form Evaluasi Diri',
+                'category' => 'prodi',
+                'sort' => 'name',
+                'dir' => 'asc',
+                'recapItems' => $emptyPaginator,
             ]);
         }
 
-        // =======================
-        //  STANDAR & INDIKATOR (TA AKTIF)
-        // =======================
-        $stdQuery = AmiStandard::query()
-            ->with('academicConfig:id,academic_code,active')
-            ->whereHas('academicConfig', fn($q) => $q->where('active', 1));
+        // ======================= DATA DASAR TA AKTIF =======================
 
-        $indQuery = AmiStandardIndicator::query()
-            ->whereHas(
-                'standard',
-                fn($q) =>
-                $q->whereHas('academicConfig', fn($qq) => $qq->where('active', 1))
-            );
-
-        // GAP DATA
-        $standardsNoIndicators = (clone $stdQuery)
-            ->withCount('indicators')
-            ->having('indicators_count', '=', 0)
-            ->take(10)
-            ->get(['id', 'name', 'academic_config_id']);
-
-        $indicatorsNoPic = (clone $indQuery)
-            ->doesntHave('pics')
-            ->orderBy('standard_id')
-            ->orderBy('id')
-            ->take(10)
-            ->get(['id', 'standard_id', 'description']);
-
-        // =======================
-        //  DAFTAR UNIT / FAK / PRODI (DATA ADMIN)
-        // =======================
+        // master unit/fakultas/prodi
         $categoryDetails = RefCategoryDetail::query()
             ->with('category')
             ->where('active', 1)
             ->get();
 
-        // =======================
-        //  FORM FED (TA AKTIF)
-        // =======================
+        // form FED per unit untuk TA aktif
         $formsActiveTA = SelfEvaluationForm::query()
             ->where('academic_config_id', $activeAc->id)
             ->with(['categoryDetail.category'])
@@ -105,7 +61,7 @@ class DashboardController extends Controller
             ])
             ->keyBy('category_detail_id');
 
-        // DETAIL FED
+        // detail FED
         $detailsActiveTA = SelfEvaluationDetail::query()
             ->whereIn('self_evaluation_form_id', $formsActiveTA->pluck('id'))
             ->with('indicator:id,standard_id')
@@ -121,13 +77,12 @@ class DashboardController extends Controller
 
         $detailsByForm = $detailsActiveTA->groupBy('self_evaluation_form_id');
 
-        // Progress per form
+        // progress per form
         $filledByForm = $detailsByForm->map(function ($g) {
             $total = $g->count();
             $filled = $g->filter(function ($d) {
                 return !is_null($d->standard_achievement_id)
-                    || (isset($d->result) && trim((string) $d->result) !== ''
-                    );
+                    || (isset($d->result) && trim((string) $d->result) !== '');
             })->count();
 
             return [
@@ -137,9 +92,7 @@ class DashboardController extends Controller
             ];
         });
 
-        // =======================
-        //  PETA INDIKATOR & PIC
-        // =======================
+        // peta indikator / standar / PIC
         $allIndicatorIds = $detailsActiveTA
             ->pluck('indicator.id')
             ->filter()
@@ -155,9 +108,7 @@ class DashboardController extends Controller
             ->get(['standard_indicator_id', 'role_id'])
             ->groupBy('standard_indicator_id');
 
-        // =======================
-        //  PETA PIMPINAN PER UNIT
-        // =======================
+        // pimpinan per unit
         $leadersRaw = DB::table('user_roles as ur')
             ->join('roles as r', 'r.id', '=', 'ur.role_id')
             ->leftJoin('users as u', 'u.cis_user_id', '=', 'ur.cis_user_id')
@@ -171,9 +122,7 @@ class DashboardController extends Controller
             ->get()
             ->groupBy('category_detail_id');
 
-        // =======================
-        //  STATISTIK KETERCapaiAN PER FORM
-        // =======================
+        // mapping ketercapaian
         $kMap = StandardAchievement::pluck('name', 'id');
 
         $emptyAch = [
@@ -198,18 +147,11 @@ class DashboardController extends Controller
             return $acc;
         });
 
-        // =======================
-        //  REKAP PER FAKULTAS / PRODI / UNIT
-        // =======================
+        // ======================= BUILD REKAP PER KATEGORI =======================
+
         $facultyRecap = [];
         $prodiRecap = [];
         $unitRecap = [];
-
-        $indicatorCollector = [
-            'faculty' => collect(),
-            'prodi' => collect(),
-            'unit' => collect(),
-        ];
 
         foreach ($categoryDetails as $cd) {
             $category = optional($cd->category)->name;
@@ -240,6 +182,7 @@ class DashboardController extends Controller
                 return $picsByIndicator->get($id, collect());
             });
 
+            // progress
             if ($formId && isset($filledByForm[$formId])) {
                 $progress = $filledByForm[$formId];
             } else {
@@ -250,10 +193,12 @@ class DashboardController extends Controller
                 ];
             }
 
+            // ketercapaian
             $achUnit = $formId
                 ? ($achievementsByForm[$formId] ?? $emptyAch)
                 : $emptyAch;
 
+            // pimpinan utama
             $leadersForUnit = $leadersRaw->get($cd->id, collect());
             $primary = null;
 
@@ -274,7 +219,7 @@ class DashboardController extends Controller
                 }
             }
 
-            // SKIP kalau primary role = "Auditor"
+            // skip kalau primary role = auditor
             if ($primary && Str::lower(trim($primary->role_name)) === 'auditor') {
                 continue;
             }
@@ -298,122 +243,69 @@ class DashboardController extends Controller
 
             if ($catLower === 'fakultas') {
                 $facultyRecap[] = $row;
-                $indicatorCollector['faculty'] =
-                    $indicatorCollector['faculty']->merge($indicatorIds);
             } elseif ($catLower === 'prodi' || $catLower === 'program studi') {
                 $prodiRecap[] = $row;
-                $indicatorCollector['prodi'] =
-                    $indicatorCollector['prodi']->merge($indicatorIds);
             } else {
                 $unitRecap[] = $row;
-                $indicatorCollector['unit'] =
-                    $indicatorCollector['unit']->merge($indicatorIds);
             }
         }
 
-        $facultyRecap = collect($facultyRecap)->sortBy('name')->values()->all();
-        $prodiRecap = collect($prodiRecap)->sortBy('name')->values()->all();
-        $unitRecap = collect($unitRecap)->sortBy('name')->values()->all();
+        // sort default by name
+        $facultyRecap = collect($facultyRecap)->sortBy('name')->values();
+        $prodiRecap = collect($prodiRecap)->sortBy('name')->values();
+        $unitRecap = collect($unitRecap)->sortBy('name')->values();
 
-        // =======================
-        //  STATISTIK KETERCapaiAN GLOBAL
-        // =======================
-        $statsK = [
-            'Melampaui' => 0,
-            'Mencapai' => 0,
-            'Tidak Mencapai' => 0,
-            'Menyimpang' => 0,
-            'Kosong' => 0,
-        ];
+        // ======================= FILTER / SORT / PAGINATION =======================
 
-        foreach ($detailsActiveTA as $d) {
-            $name = $d->standard_achievement_id
-                ? ($kMap[$d->standard_achievement_id] ?? 'Kosong')
-                : 'Kosong';
+        $category = $request->input('category', 'prodi');
+        $sort = $request->input('sort', 'name');
+        $dir = $request->input('dir', 'asc');
 
-            if (!array_key_exists($name, $statsK)) {
-                $statsK[$name] = 0;
-            }
-            $statsK[$name]++;
+        // Handle 'Semua' category: gabungkan semua recap
+        if ($category === 'semua') {
+            $items = collect()
+                ->concat($facultyRecap)
+                ->concat($prodiRecap)
+                ->concat($unitRecap);
+            $title = 'Rekap Form Evaluasi Diri - Semua Kategori';
+        } elseif ($category === 'fakultas') {
+            $items = $facultyRecap;
+            $title = 'Rekap Form Evaluasi Diri - Fakultas';
+        } elseif ($category === 'unit') {
+            $items = $unitRecap;
+            $title = 'Rekap Form Evaluasi Diri - Unit';
+        } else {
+            $items = $prodiRecap;
+            $title = 'Rekap Form Evaluasi Diri - Program Studi';
+            $category = 'prodi';
         }
 
-        // =======================
-        //  COVERAGE PIC PER ROLE
-        // =======================
-        $picCoverage = AmiStandardIndicatorPic::query()
-            ->select('role_id', DB::raw('COUNT(*) as c'))
-            ->groupBy('role_id')
-            ->with('role:id,name')
-            ->orderByDesc('c')
-            ->take(8)
-            ->get();
+        $dirDesc = $dir === 'desc';
 
-        // =======================
-        //  RINGKASAN JUMLAH INDIKATOR BERDASARKAN PIC & ROLE.CATEGORY
-        // =======================
-        $picBaseQuery = AmiStandardIndicatorPic::query()
-            ->where('active', 1)
-            ->whereHas('indicator.standard.academicConfig', function ($q) {
-                $q->where('active', 1);
-            });
+        if (in_array($sort, ['name', 'percent'])) {
+            $items = $items->sortBy($sort, SORT_REGULAR, $dirDesc)->values();
+        }
 
-        $facultyIndicators = (clone $picBaseQuery)
-            ->whereHas('role.category', function ($q) {
-                $q->whereRaw('LOWER(name) = ?', ['fakultas']);
-            })
-            ->distinct('standard_indicator_id')
-            ->count('standard_indicator_id');
+        $perPage = 10;
+        $page = (int) $request->input('page', 1);
 
-        $prodiIndicators = (clone $picBaseQuery)
-            ->whereHas('role.category', function ($q) {
-                $q->whereIn(DB::raw('LOWER(name)'), ['prodi', 'program studi']);
-            })
-            ->distinct('standard_indicator_id')
-            ->count('standard_indicator_id');
+        $paged = new LengthAwarePaginator(
+            $items->forPage($page, $perPage)->values(),
+            $items->count(),
+            $perPage,
+            $page,
+            [
+                'path' => $request->url(),
+                'query' => $request->query(),
+            ]
+        );
 
-        $unitIndicators = (clone $picBaseQuery)
-            ->whereHas('role.category', function ($q) {
-                $q->whereRaw('LOWER(name) = ?', ['unit']);
-            })
-            ->distinct('standard_indicator_id')
-            ->count('standard_indicator_id');
-
-        $totalIndicators = (clone $indQuery)->count();
-
-        $indicatorSummary = [
-            'faculty' => $facultyIndicators,
-            'prodi' => $prodiIndicators,
-            'unit' => $unitIndicators,
-            'total' => $totalIndicators,
-        ];
-
-        // =======================
-        //  FED SAMPLE (SEBAGIAN REKAP FED UNTUK DASHBOARD)
-        //  TIDAK BERGANTUNG PADA PENGISIAN FORM (HEADER/DETAIL)
-        // =======================
-        $allRecap = collect($facultyRecap)
-            ->merge($prodiRecap)
-            ->merge($unitRecap);
-
-        // di sini TIDAK difilter total>0
-        // jadi unit yang belum punya FED sama sekali pun tetap muncul
-        $fedSample = $allRecap
-            ->sortBy('name')   // urut nama biar konsisten
-            ->take(5)          // tampilkan sebagian aja
-            ->values()
-            ->all();
-
-        return view('admin.dashboard', compact(
-            'activeAc',
-            'standardsNoIndicators',
-            'indicatorsNoPic',
-            'statsK',
-            'picCoverage',
-            'facultyRecap',
-            'prodiRecap',
-            'unitRecap',
-            'indicatorSummary',
-            'fedSample'
-        ));
+        return view('auditor.fed_rekap.index', [
+            'title' => $title,
+            'category' => $category,
+            'sort' => $sort,
+            'dir' => $dir,
+            'recapItems' => $paged,
+        ]);
     }
 }

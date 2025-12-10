@@ -32,6 +32,7 @@ class RefSeeder extends Seeder
             'Draft',
             'Dikirim',
             'Disetujui',
+            'Ditolak',
         ];
 
         foreach ($status as $name) {

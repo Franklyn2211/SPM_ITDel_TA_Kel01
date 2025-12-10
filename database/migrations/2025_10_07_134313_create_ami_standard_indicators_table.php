@@ -14,9 +14,6 @@ return new class extends Migration
             $table->string('standard_id');      // FK ke ami_standards
             $table->text('description');        // deskripsi indikator
 
-            $table->text('positive_result_template')->nullable();
-            $table->text('negative_result_template')->nullable();
-
             $table->unsignedBigInteger('created_by')->nullable();
             $table->unsignedBigInteger('updated_by')->nullable();
 

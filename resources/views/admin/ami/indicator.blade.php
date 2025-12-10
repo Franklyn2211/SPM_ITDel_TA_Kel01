@@ -216,9 +216,9 @@
       @endif
     </td>
 
-    <td class="align-top">
-      <div class="mb-1">{{ \Illuminate\Support\Str::limit($descPlain, 100) }}</div>
-      @if(mb_strlen($descPlain) > 100)
+    <td class="align-top" style="max-width:350px;word-break:break-word;white-space:normal;">
+      <div class="mb-1">{{ \Illuminate\Support\Str::limit($descPlain, 80) }}</div>
+      @if(mb_strlen($descPlain) > 80)
         <button type="button"
                 class="btn btn-link p-0 small"
                 data-bs-toggle="modal"
@@ -339,7 +339,7 @@
                     placeholder="Tulis deskripsi indikator...">{{ old('description') }}</textarea>
         </div>
 
-        <div class="mb-3">
+        {{-- <div class="mb-3">
           <label class="form-label">Template Hasil Positif</label>
           <textarea name="positive_result_template"
                     id="create_positive_result_template"
@@ -361,7 +361,7 @@
           <div class="form-text">
             Opsional. Bisa dipakai sebagai contoh narasi bila indikator belum terpenuhi.
           </div>
-        </div>
+        </div> --}}
 
         <div class="mb-3">
           <label class="form-label">Role PIC <small class="text-muted">(pilih satu atau lebih)</small></label>
@@ -417,7 +417,7 @@
                     required></textarea>
         </div>
 
-        <div class="mb-3">
+        {{-- <div class="mb-3">
           <label class="form-label">Template Hasil Positif</label>
           <textarea name="positive_result_template"
                     id="edit_positive_result_template"
@@ -431,7 +431,7 @@
                     id="edit_negative_result_template"
                     class="form-control summernote"
                     rows="4"></textarea>
-        </div>
+        </div> --}}
 
         <div class="mb-3">
           <label class="form-label">Role PIC <small class="text-muted">(pilih satu atau lebih)</small></label>

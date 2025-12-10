@@ -15,33 +15,61 @@
     <div class="collapse d-lg-block my-lg-auto ms-lg-auto" id="page_header">
       <div class="d-lg-flex align-items-center gap-2">
         @if(!$form)
-          <button type="button" class="btn btn-primary btn-sm rounded-pill"
-                  data-bs-toggle="modal" data-bs-target="#modalCreateFed">
+         @if(empty($isMemberForm) || !$isMemberForm)
+            {{-- Hanya ketua / role utama yang boleh membuat form --}}
+            <button type="button" class="btn btn-primary btn-sm rounded-pill"
+                    data-bs-toggle="modal" data-bs-target="#modalCreateFed">
             <i class="ph-plus me-2"></i> Buat Form FED
-          </button>
-        @else
-          <button type="button" class="btn btn-warning btn-sm rounded-pill"
-                  data-bs-toggle="modal" data-bs-target="#modalEditHeader"
-                  @if(($form->status->name ?? '') === 'Dikirim') disabled @endif>
+            </button>
+         @endif
+         @else
+          @if(empty($isMemberForm) || !$isMemberForm)
+            {{-- Ketua / pemilik form: boleh edit header & submit --}}
+            <button type="button" class="btn btn-warning btn-sm rounded-pill"
+                    data-bs-toggle="modal" data-bs-target="#modalEditHeader"
+                    @if(($form->status->name ?? '') === 'Dikirim') disabled @endif>
             <i class="ph-pencil me-2"></i> Edit Data Auditee
-          </button>
+            </button>
 
-          <form method="POST" action="{{ route('auditee.fed.submit', $form) }}"
-                onsubmit="return confirm('Kirim Form Evaluasi Diri sekarang? Setelah dikirim tidak dapat diedit.');" class="d-inline">
-            @csrf
-            <button class="btn btn-success btn-sm rounded-pill"
+            <button type="button"
+              class="btn btn-success btn-sm rounded-pill"
+              data-bs-toggle="modal"
+              data-bs-target="#modalConfirmSubmit"
               @if(($form->status->name ?? '') === 'Dikirim' || ($progress['total'] ?? 0) === 0 || ($progress['terisi'] ?? 0) < ($progress['total'] ?? 0))
-                disabled
+              disabled
               @endif>
               <i class="ph-paper-plane-tilt me-2"></i> Submit
             </button>
-          </form>
+        {{-- Modal konfirmasi submit FED --}}
+        <div class="modal fade" id="modalConfirmSubmit" tabindex="-1" aria-labelledby="modalConfirmSubmitLabel" aria-hidden="true">
+          <div class="modal-dialog">
+            <form method="POST" action="{{ route('auditee.fed.submit', $form) }}" class="modal-content">
+              @csrf
+              <div class="modal-header">
+                <h5 class="modal-title" id="modalConfirmSubmitLabel">Konfirmasi Submit Form Evaluasi Diri</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
+              </div>
+              <div class="modal-body">
+                <div class="mb-2">
+                  Yakin ingin mengirim Form Evaluasi Diri sekarang?<br>
+                  Setelah dikirim, form tidak dapat diedit lagi.
+                </div>
+              </div>
+              <div class="modal-footer">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Batal</button>
+                <button type="submit" class="btn btn-success">Kirim</button>
+              </div>
+            </form>
+          </div>
+        </div>
+        @endif
 
-          @if($form && ($form->status->name ?? '') === 'Dikirim')
-          <a href="{{ route('auditee.fed.export', $form) }}" class="btn btn-outline-secondary btn-sm rounded-pill">
-              <i class="ph-file-doc me-2"></i> Unduh Dokumen FED (DOCX)
-          </a>
-          @endif
+        @if($form && ($form->status->name ?? '') === 'Dikirim')
+            {{-- Unduh boleh untuk ketua maupun anggota --}}
+            <a href="{{ route('auditee.fed.export', $form) }}" class="btn btn-outline-secondary btn-sm rounded-pill">
+            <i class="ph-file-doc me-2"></i> Unduh Dokumen FED (DOCX)
+            </a>
+        @endif
         @endif
       </div>
     </div>
@@ -140,11 +168,35 @@
   {{-- Tabel butir + search --}}
   <div class="card">
     <div class="card-header d-flex align-items-center">
-      <h5 class="mb-0">Daftar Butir Evaluasi Diri</h5>
-      <div class="ms-auto">
-        <input type="text" id="searchFed" class="form-control form-control-sm" placeholder="Cari butir..." style="max-width: 320px;">
-      </div>
-    </div>
+  <h5 class="mb-0">Daftar Butir Evaluasi Diri</h5>
+  <div class="ms-auto">
+    <form id="fedFilterForm" method="GET" class="d-flex gap-2">
+
+      {{-- Filter per standar (auto submit) --}}
+      <select name="standard_id"
+              class="form-select form-select-sm"
+              style="max-width: 260px;"
+              onchange="document.getElementById('fedFilterForm').submit()">
+        <option value="">Semua Standar</option>
+        @foreach($standards as $std)
+          <option value="{{ $std->id }}"
+            {{ (string)($selectedStandardId ?? request('standard_id')) === (string)$std->id ? 'selected' : '' }}>
+            {{ $std->name }}
+          </option>
+        @endforeach
+      </select>
+
+      {{-- Search indikator / standar (opsional, tinggal enter) --}}
+      <input type="text"
+             name="q"
+             value="{{ $q ?? request('q') }}"
+             class="form-control form-control-sm"
+             placeholder="Cari indikator / standar..."
+             style="max-width: 260px;">
+    </form>
+  </div>
+</div>
+
 
     @if(!$form)
       <div class="card-body">
@@ -173,11 +225,13 @@
                 <td class="text-center align-top">{{ ($details->currentPage() - 1) * $details->perPage() + $loop->iteration }}</td>
 
                 <td class="td-standar">
-                  <div class="fw-semibold text-primary mb-1">
+                  @php $descHtml = $d->indicator->description ?? ''; @endphp
+                  <div class="mb-1">
+                    {!! $descHtml !!}
+                  </div>
+                  <div class="text-primary small" style="opacity:0.7; font-weight:400;">
                     {{ optional($d->indicator->standard)->name ?? 'Standar' }}
                   </div>
-                  @php $descHtml = $d->indicator->description ?? ''; @endphp
-                  <div class="text-muted small" style="white-space: normal;">{!! $descHtml !!}</div>
                 </td>
 
                 <td class="text-center align-top">
@@ -481,8 +535,8 @@
   </div>
 </div>
 
-{{-- MODAL: ISI/EDIT DETAIL FED (WIZARD) --}}
-<div class="modal fade" id="modalIsiFed" tabindex="-1" aria-hidden="true">
+{{-- MODAL: ISI/EDIT DETAIL FED (SINGLE FORM, TANPA STEP) --}}
+<div class="modal fade" id="modalIsiFed" tabindex="-1" aria-hidden="true" data-bs-focus="false">
   <div class="modal-dialog modal-xl">
     <form method="POST" id="formIsiFed" class="modal-content">
       @csrf
@@ -494,75 +548,43 @@
       </div>
 
       <div class="modal-body">
-        {{-- indikator step --}}
-        <div class="mb-3">
-          <div class="fw-semibold mb-2">Step <span id="fedCurrentStep">1</span> / 4</div>
-          <div class="progress mb-3" style="height: 6px;">
-            <div class="progress-bar" id="fedStepProgress" style="width: 25%;"></div>
+        {{-- Ketercapaian Standard --}}
+        <div class="mb-4">
+          <label class="form-label fw-semibold">Ketercapaian Standar</label>
+          <div class="d-flex flex-column gap-2">
+            @foreach($opsiKetercapaian as $op)
+              @php
+                $nameLower = strtolower($op->name);
+                $templateType = in_array($nameLower, ['melampaui','mencapai']) ? 'pos' : 'neg';
+              @endphp
+              <label class="d-flex align-items-center gap-2">
+                <input type="radio"
+                       name="ketercapaian_standard_id"
+                       value="{{ $op->id }}"
+                       id="ketercapaian_{{ $op->id }}"
+                       data-template-type="{{ $templateType }}">
+                <span>{{ $op->name }}</span>
+              </label>
+            @endforeach
           </div>
         </div>
 
-        <div class="fed-steps">
-          {{-- STEP 1: Ketercapaian --}}
-          <div class="fed-step" data-step="1">
-            <div class="mb-3">
-              <label class="form-label fw-semibold">Ketercapaian Standard</label>
-              <div class="d-flex flex-column gap-2">
-                @foreach($opsiKetercapaian as $op)
-                  @php
-                    $nameLower = strtolower($op->name);
-                    $templateType = in_array($nameLower, ['melampaui','mencapai']) ? 'pos' : 'neg';
-                  @endphp
-                  <label class="d-flex align-items-center gap-2">
-                    <input type="radio"
-                           name="ketercapaian_standard_id"
-                           value="{{ $op->id }}"
-                           id="ketercapaian_{{ $op->id }}"
-                           data-template-type="{{ $templateType }}">
-                    <span>{{ $op->name }}</span>
-                  </label>
-                @endforeach
-              </div>
-              <div class="text-muted small mt-2">
-                Pilih ketercapaian dulu. Kalau pilih “Melampaui/Mencapai”, hasil pelaksanaan otomatis pakai template positif; kalau “Tidak Mencapai/Menyimpang” pakai template negatif.
-              </div>
-            </div>
-          </div>
+        {{-- Hasil Pelaksanaan --}}
+        <div class="mb-4">
+          <label class="form-label fw-semibold">Hasil Pelaksanaan</label>
+          <textarea name="hasil" id="modal_hasil" class="form-control summernote-fed"></textarea>
+        </div>
 
-          {{-- STEP 2: Hasil --}}
-          <div class="fed-step d-none" data-step="2">
-            <div class="mb-3">
-              <label class="form-label fw-semibold">Hasil Pelaksanaan</label>
-              <textarea name="hasil" id="modal_hasil" class="form-control summernote-fed"></textarea>
-            </div>
-          </div>
-
-          {{-- STEP 3: Bukti --}}
-          <div class="fed-step d-none" data-step="3">
-            <div class="mb-3">
-              <label class="form-label fw-semibold">Bukti/Dokumen Pendukung</label>
-              <textarea name="bukti_pendukung" id="modal_bukti" class="form-control summernote-fed"></textarea>
-            </div>
-          </div>
-
-          {{-- STEP 4: Faktor --}}
-          <div class="fed-step d-none" data-step="4">
-            <div class="mb-3">
-              <label class="form-label fw-semibold">Faktor Penghambat/Pendukung</label>
-              <textarea name="faktor_penghambat_pendukung" id="modal_faktor" class="form-control summernote-fed"></textarea>
-            </div>
-          </div>
+        {{-- Faktor Penghambat / Pendukung --}}
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Faktor Penghambat / Pendukung</label>
+          <textarea name="faktor_penghambat_pendukung" id="modal_faktor" class="form-control summernote-fed"></textarea>
         </div>
       </div>
 
       <div class="modal-footer">
-        <button type="button" class="btn btn-light d-none" id="btnPrevStep">
-          <i class="ph-arrow-left me-1"></i> Sebelumnya
-        </button>
-        <button type="button" class="btn btn-primary" id="btnNextStep">
-          Berikutnya <i class="ph-arrow-right ms-1"></i>
-        </button>
-        <button type="submit" class="btn btn-primary d-none" id="btnSaveFed">
+        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Batal</button>
+        <button type="submit" class="btn btn-primary">
           <i class="ph-floppy-disk me-1"></i> Simpan
         </button>
       </div>
@@ -587,6 +609,13 @@
   .td-standar p { margin-bottom: 0.5rem; }
   .td-standar p:last-child { margin-bottom: 0; }
   .badge { white-space: normal; word-break: break-word; }
+
+  /* Ensure Summernote's link dialog appears above the Bootstrap modal */
+  .note-modal { z-index: 1065 !important; }
+  .note-popover { z-index: 1065 !important; }
+  .note-toolbar { z-index: 1065; }
+  .note-modal-backdrop { z-index: 1064 !important; }
+  .note-modal, .note-modal * { pointer-events: auto; }
 </style>
 @endpush
 
@@ -698,60 +727,18 @@
     return (div.textContent || div.innerText || '').trim();
   }
 
-  // MODAL ISI/EDIT FED (WIZARD + TEMPLATE POS/NEG)
+  // MODAL ISI/EDIT FED: TANPA WIZARD, SATU FORM PENUH
   (function() {
     const modalEl = document.getElementById('modalIsiFed');
     const formEl  = document.getElementById('formIsiFed');
     if (!modalEl || !formEl) return;
 
-    let currentStep = 1;
-    const totalSteps = 4;
-
-    const btnPrev   = document.getElementById('btnPrevStep');
-    const btnNext   = document.getElementById('btnNextStep');
-    const btnSave   = document.getElementById('btnSaveFed');
-    const lblStep   = document.getElementById('fedCurrentStep');
-    const barStep   = document.getElementById('fedStepProgress');
-
-    function showStep(step) {
-      if (step < 1) step = 1;
-      if (step > totalSteps) step = totalSteps;
-      currentStep = step;
-
-      const stepEls = modalEl.querySelectorAll('.fed-step');
-      stepEls.forEach(function(el) {
-        const s = parseInt(el.getAttribute('data-step'), 10);
-        el.classList.toggle('d-none', s !== currentStep);
-      });
-
-      if (lblStep) lblStep.textContent = currentStep;
-      if (barStep) {
-        const percent = (currentStep / totalSteps) * 100;
-        barStep.style.width = percent + '%';
-      }
-
-      if (btnPrev) btnPrev.classList.toggle('d-none', currentStep === 1);
-      if (btnNext) btnNext.classList.toggle('d-none', currentStep === totalSteps);
-      if (btnSave) btnSave.classList.toggle('d-none', currentStep !== totalSteps);
-    }
-
-    if (btnPrev) {
-      btnPrev.addEventListener('click', function () {
-        showStep(currentStep - 1);
-      });
-    }
-
-    if (btnNext) {
-      btnNext.addEventListener('click', function () {
-        if ((currentStep === 1 || currentStep === 2) && !summernoteInitialized) {
-          initSummernote();
-        }
-        showStep(currentStep + 1);
-      });
-    }
+    // inisialisasi Summernote sekali
+    initSummernote();
 
     modalEl.addEventListener('show.bs.modal', function(ev) {
-      const btn = ev.relatedTarget; if (!btn) return;
+      const btn = ev.relatedTarget;
+      if (!btn) return;
 
       const updateUrl    = btn.getAttribute('data-update-url') || '';
       const ketercapaian = btn.getAttribute('data-ketercapaian') || '';
@@ -763,18 +750,21 @@
 
       formEl.action = updateUrl;
 
+      // simpan template di dataset modal
       modalEl.dataset.posTemplate = posTemplate;
       modalEl.dataset.negTemplate = negTemplate;
 
+      // set radio ketercapaian
       const radios = modalEl.querySelectorAll('input[name="ketercapaian_standard_id"]');
       radios.forEach(r => r.checked = false);
       if (ketercapaian) {
-        const targetRadio = modalEl.querySelector(`input[name="ketercapaian_standard_id"][value="${ketercapaian}"]`);
+        const targetRadio = modalEl.querySelector(
+          `input[name="ketercapaian_standard_id"][value="${ketercapaian}"]`
+        );
         if (targetRadio) targetRadio.checked = true;
       }
 
-      if (!summernoteInitialized) initSummernote();
-
+      // isi Summernote dengan data lama (plain text)
       setTimeout(function() {
         const hasilPlain  = stripHtmlToPlainText(hasil);
         const buktiPlain  = stripHtmlToPlainText(bukti);
@@ -784,10 +774,8 @@
         $('#modal_bukti').summernote('code', $('<p/>').text(buktiPlain).html());
         $('#modal_faktor').summernote('code', $('<p/>').text(faktorPlain).html());
 
-        $('.modal-body').scrollTop(0);
+        $(modalEl).find('.modal-body').scrollTop(0);
       }, 100);
-
-      showStep(1);
     });
 
     modalEl.addEventListener('hidden.bs.modal', function() {
@@ -797,10 +785,9 @@
         $('#modal_bukti').summernote('code', '');
         $('#modal_faktor').summernote('code', '');
       }
-      showStep(1);
     });
 
-    // auto-isi hasil pelaksanaan ketika ketercapaian diubah
+    // auto-isi hasil pelaksanaan ketika ketercapaian diubah (pakai template pos/neg)
     modalEl.addEventListener('change', function (ev) {
       const target = ev.target;
       if (target.name === 'ketercapaian_standard_id') {
@@ -811,8 +798,8 @@
         } else if (type === 'neg') {
           tpl = modalEl.dataset.negTemplate || '';
         }
+
         if (tpl) {
-          if (!summernoteInitialized) initSummernote();
           const plain = stripHtmlToPlainText(tpl);
           $('#modal_hasil').summernote('code', $('<p/>').text(plain).html());
         }
@@ -820,21 +807,6 @@
     });
   })();
 
-  // Client-side search tabel
-  (function(){
-    const inputFilter = document.getElementById('searchFed');
-    const table = document.getElementById('tableFed');
-    function applyFilter() {
-      if (!table) return;
-      const q = (inputFilter.value || '').trim().toLowerCase();
-      const rows = table.querySelectorAll('tbody tr');
-      rows.forEach(tr => {
-        const tdStandar = (tr.querySelector('.td-standar')?.textContent || '').toLowerCase();
-        tr.style.display = tdStandar.includes(q) ? '' : 'none';
-      });
-    }
-    inputFilter?.addEventListener('input', applyFilter);
-  })();
 
   // Modal Desc
   (function() {

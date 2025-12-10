@@ -15,13 +15,15 @@
     <div class="collapse d-lg-block my-lg-auto ms-lg-auto" id="page_header">
   <div class="d-lg-flex align-items-center gap-2">
 
+
+        @php $isHistory = request()->boolean('history'); @endphp
         {{-- Tombol tambah standar --}}
+        @unless($isHistory)
         <button type="button" class="btn btn-primary btn-sm rounded-pill" data-bs-toggle="modal" data-bs-target="#modalCreateStandard">
           <i class="ph-plus me-2"></i>
           Tambah Standar
         </button>
-
-        @php $isHistory = request()->boolean('history'); @endphp
+        @endunless
 
         {{-- TOMBOL GLOBAL: submit semua / set semua draft (hanya saat TA aktif) --}}
         @unless($isHistory)
@@ -113,13 +115,16 @@
   <div class="card">
     <div class="card-header d-flex align-items-center">
       <h5 class="mb-0">Daftar Standar AMI</h5>
-      <div class="ms-auto" style="max-width: 320px;">
+      <form class="ms-auto" method="GET" action="{{ url()->current() }}" style="max-width:320px;">
         <div class="input-group">
           <span class="input-group-text"><i class="ph-magnifying-glass"></i></span>
-          <input type="text" id="searchStandard" class="form-control" placeholder="Cari standar / kode akademik...">
-          <button class="btn btn-outline-secondary" type="button" id="btnResetFilter">Reset</button>
+          <input type="text" name="q" class="form-control" placeholder="Cari standar / kode akademik..." value="{{ request('q') }}">
+          @if(request()->filled('q'))
+            <a href="{{ url()->current() }}" class="btn btn-outline-secondary">Reset</a>
+          @endif
+          <button class="btn btn-primary" type="submit">Cari</button>
         </div>
-      </div>
+      </form>
     </div>
 
     <div class="table-responsive">
@@ -189,30 +194,31 @@
               </td>
 
               <td class="text-center">
-                <div class="d-flex justify-content-center flex-wrap gap-1">
+                @unless($isHistory)
+                  <div class="d-flex justify-content-center flex-wrap gap-1">
+                    {{-- Edit --}}
+                    <button
+                      type="button"
+                      class="btn btn-warning btn-icon btn-sm"
+                      title="Edit"
+                      onclick="openEditStandardModal(
+                        {{ Js::from($row->id) }},
+                        {{ Js::from($row->name) }},
+                        '{{ route('admin.ami.standard.update', $row->id) }}'
+                      )">
+                      <i class="ph-pencil"></i>
+                    </button>
 
-                  {{-- Edit --}}
-                  <button
-                    type="button"
-                    class="btn btn-warning btn-icon btn-sm"
-                    title="Edit"
-                    onclick="openEditStandardModal(
-                      {{ Js::from($row->id) }},
-                      {{ Js::from($row->name) }},
-                      '{{ route('admin.ami.standard.update', $row->id) }}'
-                    )">
-                    <i class="ph-pencil"></i>
-                  </button>
-
-                  {{-- Hapus --}}
-                  <button
-                    type="button"
-                    class="btn btn-danger btn-icon btn-sm"
-                    title="Hapus"
-                    onclick="confirmDelete('{{ route('admin.ami.standard.destroy', $row->id) }}')">
-                    <i class="ph-trash"></i>
-                  </button>
-                </div>
+                    {{-- Hapus --}}
+                    <button
+                      type="button"
+                      class="btn btn-danger btn-icon btn-sm"
+                      title="Hapus"
+                      onclick="confirmDelete('{{ route('admin.ami.standard.destroy', $row->id) }}')">
+                      <i class="ph-trash"></i>
+                    </button>
+                  </div>
+                @endunless
 
                 @if($indikatorCount == 0)
                   <div class="text-muted fs-xs mt-1">
@@ -306,27 +312,7 @@
     document.getElementById('formGlobalSubmit')?.submit();
   });
 
-  // Client-side filter: cari pada kolom Nama & Kode Akademik
-  const inputFilter = document.getElementById('searchStandard');
-  const btnReset    = document.getElementById('btnResetFilter');
-  const table       = document.getElementById('tableStandard');
 
-  function applyFilter() {
-    const q = (inputFilter.value || '').trim().toLowerCase();
-    const rows = table.querySelectorAll('tbody tr');
-
-    rows.forEach(tr => {
-      const name = (tr.querySelector('.td-name')?.textContent || '').toLowerCase();
-      const ac   = (tr.querySelector('.td-ac')?.textContent || '').toLowerCase();
-      tr.style.display = (name.includes(q) || ac.includes(q)) ? '' : 'none';
-    });
-  }
-
-  inputFilter?.addEventListener('input', applyFilter);
-  btnReset?.addEventListener('click', () => {
-    inputFilter.value = '';
-    applyFilter();
-  });
 
   // Modal Edit helper
   function openEditStandardModal(id, name, actionUrl) {
