@@ -790,82 +790,176 @@ public function exportDoc(Request $request, SelfEvaluationForm $form): BinaryFil
         return $text === '' ? $fallback : $text;
     };
 
-    // ==== HELPER HTML UNTUK TextRun (link tetap, list rapi) ====
-    $cleanHtmlForWord = function (?string $html): string {
+    $parseHtmlToTextRun = function (\PhpOffice\PhpWord\Element\TextRun $run, ?string $html) {
         $html = $html ?? '';
-        if ($html === '') {
-            return '';
+        if (trim($html) === '') {
+            return;
         }
 
-        $html = html_entity_decode($html, ENT_QUOTES, 'UTF-8');
+        $dom = new \DOMDocument();
+        $html = mb_convert_encoding($html, 'HTML-ENTITIES', 'UTF-8');
+        libxml_use_internal_errors(true);
+        $dom->loadHTML("<div>{$html}</div>", LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD);
+        libxml_clear_errors();
 
-        // 1) Paragraf: tiap </p> diganti <br />, supaya kalimat berikutnya turun baris
-        $html = preg_replace('#</p>\s*<p#i', '</p><p', $html);
-        $html = str_ireplace(['<p>', '<div>'], '', $html);
-        $html = str_ireplace(['</p>', '</div>'], '<br />', $html);
+        $container = $dom->getElementsByTagName('div')->item(0);
+        if (!$container) {
+            $run->addText(strip_tags($html));
+            return;
+        }
 
-        // 2) Ordered list type="a" -> a. b. c. (jarang dipakai di hasil, tapi kita handle)
-        $html = preg_replace_callback(
-            '#<ol[^>]*type="a"[^>]*>(.*?)</ol>#is',
-            function ($m) {
-                $inner = $m[1];
-                preg_match_all('#<li[^>]*>(.*?)</li>#is', $inner, $items);
-                $out  = [];
-                $char = ord('a');
-                foreach ($items[1] as $item) {
-                    $out[] = '<br />' . chr($char) . '. ' . $item;
-                    $char++;
+        // Closure rekursif untuk traverse
+        $traverse = function ($node, $style = [], $listContext = []) use (&$traverse, $run) {
+            if ($node->nodeType === XML_TEXT_NODE) {
+                // Text biasa
+                $text = $node->textContent;
+                if ($text !== '') {
+                    $run->addText($text, $style);
                 }
-                return implode('', $out);
-            },
-            $html
-        );
+                return;
+            }
 
-        // 3) List item biasa: <li>...</li> -> "<br />• konten"
-        $html = preg_replace(
-            '#<li[^>]*>(.*?)</li>#is',
-            '<br />• $1',
-            $html
-        );
+            if ($node->nodeType !== XML_ELEMENT_NODE) {
+                return;
+            }
 
-        // 4) Buang tag list wrapper
-        $html = str_ireplace(['<ul>', '</ul>', '<ol>', '</ol>'], '', $html);
+            $tag = strtolower($node->nodeName);
 
-        // 5) Izinkan hanya tag inline aman + <br> :
-        //    <br>, <strong>/<b>, <em>/<i>, <u>, <a>
-        $allowed = '<br><br/><strong><b><em><i><u><a>';
-        $html = strip_tags($html, $allowed);
+            // Handle styling inline
+            if ($tag === 'b' || $tag === 'strong') {
+                $style['bold'] = true;
+            } elseif ($tag === 'i' || $tag === 'em') {
+                $style['italic'] = true;
+            } elseif ($tag === 'u') {
+                $style['underline'] = 'single';
+            }
 
-        // 6) Rapikan spasi
-        $html = preg_replace('/\s+/u', ' ', $html);
-        $html = trim($html);
+            // Handle Block & Splits
+            // P / DIV: jika bukan node pertama, beri break
+            if ($tag === 'p' || $tag === 'div') {
+                // Cek apakah node ini punya previous sibling text/element, kalau ya beri break
+               if ($node->previousSibling) {
+                   $run->addTextBreak();
+               }
+            }
+            if ($tag === 'br') {
+                $run->addTextBreak();
+                return;
+            }
 
-        return $html;
+            // Handle LIST
+            if ($tag === 'ul' || $tag === 'ol') {
+                $idx = 1;
+                $depth = ($listContext['depth'] ?? 0) + 1;
+                $type  = $tag === 'ol'
+                    ? ($node->getAttribute('type') ?: '1')
+                    : 'ul';
+
+                foreach ($node->childNodes as $child) {
+                    if (strtolower($child->nodeName) === 'li') {
+                        $traverse($child, $style, ['depth' => $depth, 'type' => $type, 'index' => $idx++]);
+                    }
+                }
+                return; // children processed manually
+            }
+
+            // Handle LIST ITEM
+            if ($tag === 'li') {
+                $depth = $listContext['depth'] ?? 1;
+                $idx   = $listContext['index'] ?? 1;
+                $lType = $listContext['type']  ?? 'ul';
+
+                // Marker
+                $marker = '• ';
+                if ($lType !== 'ul') {
+                    if ($lType === 'a') {
+                        $alpha = chr(96 + (($idx - 1) % 26 + 1));
+                        $marker = "{$alpha}. ";
+                    } elseif ($lType === 'A') {
+                        $alpha = chr(64 + (($idx - 1) % 26 + 1));
+                        $marker = "{$alpha}. ";
+                    } else {
+                        $marker = "{$idx}. ";
+                    }
+                }
+
+                $run->addTextBreak(); // Item list selalu baris baru
+
+                // Indentasi manual dengan non-breaking space (utf-8 0xA0)
+                // 3 spasi per kedalaman
+                $nbsp = "\xC2\xA0";
+                $indentStr = str_repeat($nbsp . $nbsp . $nbsp, $depth);
+
+                $run->addText($indentStr . $marker, $style);
+
+                // Isi item
+                foreach ($node->childNodes as $child) {
+                    $traverse($child, $style, $listContext);
+                }
+                return;
+            }
+
+            // Handle LINK
+            if ($tag === 'a') {
+                $href = $node->getAttribute('href');
+                $inner = $node->textContent;
+                if ($href) {
+                     // Gunakan addLink biasa.
+                     // Note: TemplateProcessor kadang tidak otomatis bind rels untuk link baru di dalam block.
+                     // Tetapi error 'Invalid type HYPERLINK' terjadi karena addField memvalidasi tipe filed yg didukung.
+                     // Jika addLink tidak clickable di output akhir karena limitasi TemplateProcessor,
+                     // setidaknya tidak error 500.
+                     $linkStyle = array_merge($style, ['color' => '0000FF', 'underline' => 'single']);
+                     $run->addLink($href, $inner, $linkStyle);
+                     return;
+                }
+            }
+
+            // Recurse generic
+            foreach ($node->childNodes as $child) {
+                $traverse($child, $style, $listContext);
+            }
+        };
+
+        $traverse($container);
     };
 
     // ==== SUSUN DATA UNTUK cloneRow ====
     $rows        = [];
-    $standarHtml = [];
-    $hasilHtml   = [];
-    $faktorHtml  = [];
+    // Kita simpan raw values untuk plain text di cloneRow (opsi jika layout tabel simple)
+    // Tapi karena pakai setComplexBlock, array ini lebih ke metadata row count & flag
+
+    // Kita butuh TextRun object untuk setiap sel yg kompleks
+    $standarBlocks = [];
+    $hasilBlocks   = [];
+    $faktorBlocks  = [];
 
     foreach ($details as $i => $d) {
-        $stdNamePlain = $cleanText(optional($d->indicator?->standard)->name ?? '', '');
+        $index = $i + 1;
 
-        // Deskripsi indikator (Summernote, HTML)
-        $indikatorDescHtml = $cleanHtmlForWord($d->indicator->description ?? '');
-
-        // Gabung: judul standar (bold) + deskripsi indikator
-        $standarCombined = '';
-        if ($stdNamePlain !== '') {
-            $standarCombined .= '<strong>' . e($stdNamePlain) . '</strong><br />';
+        // 1. Standar Block
+        $stdRun = new TextRun();
+        $stdName = trim(strip_tags($d->indicator->standard->name ?? ''));
+        if ($stdName) {
+            $stdRun->addText($stdName, ['bold' => true]);
+            $stdRun->addTextBreak();
         }
-        if ($indikatorDescHtml !== '') {
-            $standarCombined .= $indikatorDescHtml;
-        }
+        // Deskripsi Indikator
+        $parseHtmlToTextRun($stdRun, $d->indicator->description ?? '');
+        $standarBlocks[$index] = $stdRun;
 
+        // 2. Hasil Block
+        $resRun = new TextRun();
+        $parseHtmlToTextRun($resRun, $d->result ?? '');
+        $hasilBlocks[$index] = $resRun;
+
+        // 3. Faktor Block
+        $fakRun = new TextRun();
+        $parseHtmlToTextRun($fakRun, $d->contributing_factors ?? '');
+        $faktorBlocks[$index] = $fakRun;
+
+        // Data simplerow
         $flag = strtolower(optional($d->standardAchievement)->name ?? '');
-
         $picRoleNames = DB::table('ami_standard_indicator_pic as p')
             ->join('roles as r', 'r.id', '=', 'p.role_id')
             ->where('p.standard_indicator_id', $d->ami_standard_indicator_id)
@@ -874,25 +968,14 @@ public function exportDoc(Request $request, SelfEvaluationForm $form): BinaryFil
             ->unique()
             ->implode(', ');
 
-        $sumberPengelola = $cleanText($picRoleNames, '');
-
-        $index = $i + 1;
-
-        // Baris untuk cloneRow: hanya isi kolom simple
         $rows[] = [
             'no'             => (string) $index,
-            'sumber'         => $sumberPengelola,
+            'sumber'         => $cleanText($picRoleNames, ''),
             'melampaui'      => $flag === 'melampaui' ? '✓' : '',
             'mencapai'       => $flag === 'mencapai' ? '✓' : '',
             'tidak_mencapai' => $flag === 'tidak mencapai' ? '✓' : '',
             'menyimpang'     => $flag === 'menyimpang' ? '✓' : '',
-            // standar / hasil / faktor diisi via complexBlock
         ];
-
-        // Simpan HTML yang sudah disanitasi
-        $standarHtml[$index] = $standarCombined;
-        $hasilHtml[$index]   = $cleanHtmlForWord($d->result ?? '');
-        $faktorHtml[$index]  = $cleanHtmlForWord($d->contributing_factors ?? '');
     }
 
     // Clone baris berdasarkan placeholder ${no}
@@ -902,22 +985,14 @@ public function exportDoc(Request $request, SelfEvaluationForm $form): BinaryFil
     foreach ($rows as $idx => $_) {
         $i = $idx + 1;
 
-        if (!empty($standarHtml[$i])) {
-            $block = new TextRun();
-            WordHtml::addHtml($block, $standarHtml[$i], false, false);
-            $tp->setComplexBlock("standar#{$i}", $block);   // template: ${standar}
+        if (isset($standarBlocks[$i])) {
+            $tp->setComplexBlock("standar#{$i}", $standarBlocks[$i]);
         }
-
-        if (!empty($hasilHtml[$i])) {
-            $block = new TextRun();
-            WordHtml::addHtml($block, $hasilHtml[$i], false, false);
-            $tp->setComplexBlock("hasil#{$i}", $block);     // template: ${hasil}
+        if (isset($hasilBlocks[$i])) {
+            $tp->setComplexBlock("hasil#{$i}", $hasilBlocks[$i]);
         }
-
-        if (!empty($faktorHtml[$i])) {
-            $block = new TextRun();
-            WordHtml::addHtml($block, $faktorHtml[$i], false, false);
-            $tp->setComplexBlock("faktor#{$i}", $block);    // template: ${faktor}
+        if (isset($faktorBlocks[$i])) {
+            $tp->setComplexBlock("faktor#{$i}", $faktorBlocks[$i]);
         }
     }
 

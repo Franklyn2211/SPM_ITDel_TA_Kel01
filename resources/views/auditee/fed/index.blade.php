@@ -717,14 +717,11 @@
     summernoteInitialized = true;
   }
 
-  // helper: decode & buang tag HTML -> plain text
-  function stripHtmlToPlainText(html) {
+  // helper: decode HTML entities (e.g. &lt; -> <) but keep tags
+  function decodeHtml(html) {
     const txt = document.createElement('textarea');
     txt.innerHTML = html || '';
-    const decoded = txt.value;
-    const div = document.createElement('div');
-    div.innerHTML = decoded;
-    return (div.textContent || div.innerText || '').trim();
+    return txt.value;
   }
 
   // MODAL ISI/EDIT FED: TANPA WIZARD, SATU FORM PENUH
@@ -764,15 +761,45 @@
         if (targetRadio) targetRadio.checked = true;
       }
 
-      // isi Summernote dengan data lama (plain text)
+      // isi Summernote dengan data lama (HTML)
       setTimeout(function() {
-        const hasilPlain  = stripHtmlToPlainText(hasil);
-        const buktiPlain  = stripHtmlToPlainText(bukti);
-        const faktorPlain = stripHtmlToPlainText(faktor);
+        const hasilHtml  = decodeHtml(hasil);
+        const buktiHtml  = decodeHtml(bukti);
+        const faktorHtml = decodeHtml(faktor);
 
-        $('#modal_hasil').summernote('code', $('<p/>').text(hasilPlain).html());
-        $('#modal_bukti').summernote('code', $('<p/>').text(buktiPlain).html());
-        $('#modal_faktor').summernote('code', $('<p/>').text(faktorPlain).html());
+        $('#modal_hasil').summernote('code', hasilHtml);
+        // Note: bukti and faktor inputs in the modal HTML might need checking if they exist as summernote instances
+        // Based on lines 581 in view file, #modal_faktor is .summernote-fed.
+        // But checking the view file content again, there is no #modal_bukti.
+        // Line 256 sends data-bukti.
+        // Line 602 in view: .note-editing-area { min-height: 150px; }
+        // Let's check the modal body again...
+        // Ah, looking at lines 573-582, I only see 'hasil' aka #modal_hasil and 'faktor_penghambat_pendukung' aka #modal_faktor.
+        // Wait, line 256 passes data-bukti, but is there an input for it?
+        // Lines 575 and 581 are the textareas. Where is bukti?
+        // Looking at previous view_file output...
+        // Line 575: textarea name="hasil" id="modal_hasil"
+        // Line 581: textarea name="faktor_penghambat_pendukung" id="modal_faktor"
+        // I don't see a field for 'bukti_pendukung'.
+        // However, the Javascript I'm replacing (lines 770/774) references `buktiPlain` and `#modal_bukti`.
+        // If `#modal_bukti` doesn't exist in DOM, jQuery won't crash, it just won't do anything.
+        // I will keep the logic safely but fix the decode.
+
+        // Checking lines 572-583 again:
+        // 573: <label... Hasil Pelaksanaan ...>
+        // 575: <textarea name="hasil" id="modal_hasil"...>
+        // 580: <label... Faktor ...>
+        // 581: <textarea name="faktor_penghambat_pendukung" id="modal_faktor"...>
+
+        // It seems 'bukti_pendukung' input is MISSING in the modal HTML if the javascript expects it!
+        // But for now, focusing on fixing the stripping issue.
+
+        $('#modal_faktor').summernote('code', faktorHtml);
+
+        // If #modal_bukti existed, we would do this:
+        if ($('#modal_bukti').length) {
+             $('#modal_bukti').summernote('code', buktiHtml);
+        }
 
         $(modalEl).find('.modal-body').scrollTop(0);
       }, 100);
