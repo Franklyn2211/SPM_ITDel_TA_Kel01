@@ -24,6 +24,7 @@ use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use PhpOffice\PhpWord\PhpWord;
 use PhpOffice\PhpWord\IOFactory;
 use PhpOffice\PhpWord\Shared\Html as WordHtml;
+use ConvertApi\ConvertApi;
 
 class EvaluasiDiriController extends Controller
 {
@@ -1016,9 +1017,358 @@ public function exportDoc(Request $request, SelfEvaluationForm $form): BinaryFil
         @unlink($target);
     }
 
+    try {
     $tp->saveAs($target);
+} catch (\Throwable $e) {
+    logger()->error('EXPORT DOCX FAILED', [
+        'message' => $e->getMessage(),
+        'trace'   => $e->getTraceAsString(),
+    ]);
+    throw $e;
+}
+
 
     return response()->download($target, $filename)->deleteFileAfterSend(true);
+}
+
+/**
+ * Export Form Evaluasi Diri ke PDF menggunakan ConvertAPI
+ * Generates DOCX first then converts to PDF for 100% identical output
+ */
+public function exportPdf(Request $request, SelfEvaluationForm $form): BinaryFileResponse
+{
+    $this->ensureFormOwnedByUser($form);
+    $this->ensureFormOnActiveYear($form);
+
+    $submittedId = EvaluationStatus::where('name', 'Dikirim')->value('id');
+    abort_unless($form->status_id === $submittedId, 403, 'Dokumen hanya tersedia setelah form dikirim.');
+
+    // Check ConvertAPI secret is configured
+    $convertApiSecret = env('CONVERTAPI_SECRET');
+    if (empty($convertApiSecret)) {
+        abort(500, 'CONVERTAPI_SECRET belum dikonfigurasi. Silakan set di file .env');
+    }
+
+    if (!class_exists(\ZipArchive::class)) {
+        abort(500, 'PHP Zip extension belum aktif.');
+    }
+
+    $ur            = $this->currentUserRole();
+    $currentRoleId = $ur?->role_id;
+
+    // DETAIL SESUAI ROLE & TAHUN (same logic as exportDoc)
+    $details = SelfEvaluationDetail::with(['indicator.standard', 'standardAchievement'])
+        ->where('self_evaluation_form_id', $form->id)
+        ->whereHas('indicator', function ($q) use ($form, $currentRoleId) {
+            $q->where('ami_standard_indicators.active', 1)
+                ->whereExists(function ($qq) use ($form) {
+                    $qq->select(DB::raw(1))
+                        ->from('ami_standards as s')
+                        ->whereColumn('s.id', 'ami_standard_indicators.standard_id')
+                        ->where('s.active', 1)
+                        ->where('s.academic_config_id', $form->academic_config_id);
+                })
+                ->whereExists(function ($qp) use ($currentRoleId) {
+                    $qp->select(DB::raw(1))
+                        ->from('ami_standard_indicator_pic as p')
+                        ->whereColumn('p.standard_indicator_id', 'ami_standard_indicators.id')
+                        ->where('p.active', 1)
+                        ->where('p.role_id', $currentRoleId);
+                });
+        })
+        ->orderBy('ami_standard_indicator_id')
+        ->get();
+
+    // ==== LOAD TEMPLATE (same as exportDoc) ====
+    $templateAbsPath = storage_path('app/' . self::TEMPLATE_PATH);
+    if (!is_file($templateAbsPath)) {
+        abort(500, 'Template DOCX tidak ditemukan: ' . self::TEMPLATE_PATH);
+    }
+
+    $tp = new TemplateProcessor($templateAbsPath);
+
+    // ==== HEADER (AUDITEE, TA, DLL) ====
+    $taName   = optional($form->academicConfig)->name ?? '';
+    $unitName = optional($form->categoryDetail)->name ?? '';
+
+    $ketua      = trim(($form->head_auditee_position ?? '') . ' / ' . ($form->head_auditee_name ?? ''), ' /');
+    $namaketua  = trim($form->head_auditee_name ?? '');
+    $angg1      = trim(($form->member_auditee_1_position ?? '') . ' / ' . ($form->member_auditee_1_name ?? ''), ' /');
+    $angg2      = trim(($form->member_auditee_2_position ?? '') . ' / ' . ($form->member_auditee_2_name ?? ''), ' /');
+    $angg3      = trim(($form->member_auditee_3_position ?? '') . ' / ' . ($form->member_auditee_3_name ?? ''), ' /');
+
+    $tp->setValue('categoryDetail', $unitName);
+    $tp->setValue('ta', $taName);
+    $tp->setValue('ketua', $ketua ?: '');
+    $tp->setValue('namaketua', $namaketua ?: '');
+    $tp->setValue('anggota1', $angg1 ?: '');
+    $tp->setValue('anggota2', $angg2 ?: '');
+    $tp->setValue('anggota3', $angg3 ?: '');
+    $tp->setValue('tanggal', now()->format('d/m/Y'));
+
+    // ==== HELPER TEXT PLAIN ====
+    $cleanText = function (?string $value, string $fallback = ''): string {
+        $text = $value ?? '';
+        $text = strip_tags($text);
+        $text = html_entity_decode($text, ENT_QUOTES, 'UTF-8');
+        $text = preg_replace('/[^\P{C}\n]+/u', '', $text);
+        $text = preg_replace('/[\x00-\x1F\x7F]/u', '', $text);
+        $text = preg_replace('/\s+/u', ' ', $text);
+        $text = trim($text);
+        return $text === '' ? $fallback : $text;
+    };
+
+    $parseHtmlToTextRun = function (\PhpOffice\PhpWord\Element\TextRun $run, ?string $html) {
+        $html = $html ?? '';
+        if (trim($html) === '') {
+            return;
+        }
+
+        $dom = new \DOMDocument();
+        $html = mb_convert_encoding($html, 'HTML-ENTITIES', 'UTF-8');
+        libxml_use_internal_errors(true);
+        $dom->loadHTML("<div>{$html}</div>", LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD);
+        libxml_clear_errors();
+
+        $container = $dom->getElementsByTagName('div')->item(0);
+        if (!$container) {
+            $run->addText(strip_tags($html));
+            return;
+        }
+
+        $traverse = function ($node, $style = [], $listContext = []) use (&$traverse, $run) {
+            if ($node->nodeType === XML_TEXT_NODE) {
+                $text = $node->textContent;
+                if ($text !== '') {
+                    $run->addText($text, $style);
+                }
+                return;
+            }
+
+            if ($node->nodeType !== XML_ELEMENT_NODE) {
+                return;
+            }
+
+            $tag = strtolower($node->nodeName);
+
+            if ($tag === 'b' || $tag === 'strong') {
+                $style['bold'] = true;
+            } elseif ($tag === 'i' || $tag === 'em') {
+                $style['italic'] = true;
+            } elseif ($tag === 'u') {
+                $style['underline'] = 'single';
+            }
+
+            if ($tag === 'p' || $tag === 'div') {
+                if ($node->previousSibling) {
+                    $run->addTextBreak();
+                }
+            }
+            if ($tag === 'br') {
+                $run->addTextBreak();
+                return;
+            }
+
+            if ($tag === 'ul' || $tag === 'ol') {
+                $idx = 1;
+                $depth = ($listContext['depth'] ?? 0) + 1;
+                $type  = $tag === 'ol'
+                    ? ($node->getAttribute('type') ?: '1')
+                    : 'ul';
+
+                foreach ($node->childNodes as $child) {
+                    if (strtolower($child->nodeName) === 'li') {
+                        $traverse($child, $style, ['depth' => $depth, 'type' => $type, 'index' => $idx++]);
+                    }
+                }
+                return;
+            }
+
+            if ($tag === 'li') {
+                $depth = $listContext['depth'] ?? 1;
+                $idx   = $listContext['index'] ?? 1;
+                $lType = $listContext['type']  ?? 'ul';
+
+                $marker = '• ';
+                if ($lType !== 'ul') {
+                    if ($lType === 'a') {
+                        $alpha = chr(96 + (($idx - 1) % 26 + 1));
+                        $marker = "{$alpha}. ";
+                    } elseif ($lType === 'A') {
+                        $alpha = chr(64 + (($idx - 1) % 26 + 1));
+                        $marker = "{$alpha}. ";
+                    } else {
+                        $marker = "{$idx}. ";
+                    }
+                }
+
+                $run->addTextBreak();
+                $nbsp = "\xC2\xA0";
+                $indentStr = str_repeat($nbsp . $nbsp . $nbsp, $depth);
+                $run->addText($indentStr . $marker, $style);
+
+                foreach ($node->childNodes as $child) {
+                    $traverse($child, $style, $listContext);
+                }
+                return;
+            }
+
+            if ($tag === 'a') {
+                $href = $node->getAttribute('href');
+                $inner = $node->textContent;
+                if ($href) {
+                    $linkStyle = array_merge($style, ['color' => '0000FF', 'underline' => 'single']);
+                    $run->addLink($href, $inner, $linkStyle);
+                    return;
+                }
+            }
+
+            foreach ($node->childNodes as $child) {
+                $traverse($child, $style, $listContext);
+            }
+        };
+
+        $traverse($container);
+    };
+
+    // ==== SUSUN DATA UNTUK cloneRow ====
+    $rows        = [];
+    $standarBlocks = [];
+    $hasilBlocks   = [];
+    $faktorBlocks  = [];
+
+    foreach ($details as $i => $d) {
+        $index = $i + 1;
+
+        $stdRun = new TextRun();
+        $stdName = trim(strip_tags($d->indicator->standard->name ?? ''));
+        if ($stdName) {
+            $stdRun->addText($stdName, ['bold' => true]);
+            $stdRun->addTextBreak();
+        }
+        $parseHtmlToTextRun($stdRun, $d->indicator->description ?? '');
+        $standarBlocks[$index] = $stdRun;
+
+        $resRun = new TextRun();
+        $parseHtmlToTextRun($resRun, $d->result ?? '');
+        $hasilBlocks[$index] = $resRun;
+
+        $fakRun = new TextRun();
+        $parseHtmlToTextRun($fakRun, $d->contributing_factors ?? '');
+        $faktorBlocks[$index] = $fakRun;
+
+        $flag = strtolower(optional($d->standardAchievement)->name ?? '');
+        $picRoleNames = DB::table('ami_standard_indicator_pic as p')
+            ->join('roles as r', 'r.id', '=', 'p.role_id')
+            ->where('p.standard_indicator_id', $d->ami_standard_indicator_id)
+            ->where('p.active', 1)
+            ->pluck('r.name')
+            ->unique()
+            ->implode(', ');
+
+        $rows[] = [
+            'no'             => (string) $index,
+            'sumber'         => $cleanText($picRoleNames, ''),
+            'melampaui'      => $flag === 'melampaui' ? '✓' : '',
+            'mencapai'       => $flag === 'mencapai' ? '✓' : '',
+            'tidak_mencapai' => $flag === 'tidak mencapai' ? '✓' : '',
+            'menyimpang'     => $flag === 'menyimpang' ? '✓' : '',
+        ];
+    }
+
+    $tp->cloneRowAndSetValues('no', $rows);
+
+    foreach ($rows as $idx => $_) {
+        $i = $idx + 1;
+        if (isset($standarBlocks[$i])) {
+            $tp->setComplexBlock("standar#{$i}", $standarBlocks[$i]);
+        }
+        if (isset($hasilBlocks[$i])) {
+            $tp->setComplexBlock("hasil#{$i}", $hasilBlocks[$i]);
+        }
+        if (isset($faktorBlocks[$i])) {
+            $tp->setComplexBlock("faktor#{$i}", $faktorBlocks[$i]);
+        }
+    }
+
+    // ==== SIMPAN DOCX SEMENTARA ====
+    $safe = function (string $name): string {
+        $name = preg_replace('/[\\\\\\/:*?"<>|]+/', '', $name);
+        $name = trim(preg_replace('/\s+/', ' ', $name));
+        return Str::limit($name, 120, '');
+    };
+
+    $safeUnit = $safe($unitName ?: 'Unit');
+    $docxFilename = "F-219_Formulir_Evaluasi_Diri_{$safeUnit}.docx";
+    $pdfFilename = "F-219_Formulir_Evaluasi_Diri_{$safeUnit}.pdf";
+
+    $tmpDir = storage_path('app/tmp');
+    if (!is_dir($tmpDir)) {
+        @mkdir($tmpDir, 0775, true);
+    }
+
+    $docxPath = rtrim($tmpDir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $docxFilename;
+    $pdfPath = rtrim($tmpDir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $pdfFilename;
+
+    if (file_exists($docxPath)) {
+        @unlink($docxPath);
+    }
+    if (file_exists($pdfPath)) {
+        @unlink($pdfPath);
+    }
+
+    $tp->saveAs($docxPath);
+
+    // ==== CONVERT DOCX TO PDF USING CONVERTAPI ====
+    try {
+        ConvertApi::setApiCredentials($convertApiSecret);
+
+        $result = ConvertApi::convert('pdf', [
+            'File' => $docxPath,
+        ], 'docx');
+
+        // Save the converted PDF
+        $result->saveFiles($tmpDir);
+
+        // ConvertAPI saves with original name but .pdf extension
+        // Check if file exists, if not try to find it
+        if (!file_exists($pdfPath)) {
+            // Look for any PDF file just created
+            $files = glob($tmpDir . '/*.pdf');
+            if (!empty($files)) {
+                // Get the most recently created PDF
+                usort($files, function($a, $b) {
+                    return filemtime($b) - filemtime($a);
+                });
+                $convertedPdf = $files[0];
+                if ($convertedPdf !== $pdfPath) {
+                    rename($convertedPdf, $pdfPath);
+                }
+            }
+        }
+
+        // Clean up DOCX temp file
+        if (file_exists($docxPath)) {
+            @unlink($docxPath);
+        }
+
+        if (!file_exists($pdfPath)) {
+            abort(500, 'Gagal mengkonversi dokumen ke PDF.');
+        }
+
+        return response()->download($pdfPath, $pdfFilename)->deleteFileAfterSend(true);
+
+    } catch (\Exception $e) {
+        // Clean up temp files on error
+        if (file_exists($docxPath)) {
+            @unlink($docxPath);
+        }
+        if (file_exists($pdfPath)) {
+            @unlink($pdfPath);
+        }
+
+        abort(500, 'Gagal mengkonversi ke PDF: ' . $e->getMessage());
+    }
 }
 
 

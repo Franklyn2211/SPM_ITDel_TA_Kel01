@@ -36,6 +36,7 @@ Route::prefix('auditee')->name('auditee.')->middleware(['auth', 'role:Ketua Prog
     Route::post('/fed/{form}/submit', [EvaluasiDiriController::class, 'submit'])->name('fed.submit');
     Route::get('user/search', [EvaluasiDiriController::class, 'searchUsers'])->name('fed.searchUsers');
     Route::get('/fed/{form}/export', [EvaluasiDiriController::class, 'exportDoc'])->name('fed.export');
+    Route::get('/fed/{form}/export-pdf', [EvaluasiDiriController::class, 'exportPdf'])->name('fed.exportPdf');
 });
 
 Route::prefix('auditor')->name('auditor.')->middleware(['auth', 'role:Auditor'])->group(function () {

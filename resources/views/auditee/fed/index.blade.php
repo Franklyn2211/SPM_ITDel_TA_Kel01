@@ -67,7 +67,10 @@
         @if($form && ($form->status->name ?? '') === 'Dikirim')
             {{-- Unduh boleh untuk ketua maupun anggota --}}
             <a href="{{ route('auditee.fed.export', $form) }}" class="btn btn-outline-secondary btn-sm rounded-pill">
-            <i class="ph-file-doc me-2"></i> Unduh Dokumen FED (DOCX)
+            <i class="ph-file-doc me-2"></i> Unduh DOCX
+            </a>
+            <a href="{{ route('auditee.fed.exportPdf', $form) }}" class="btn btn-outline-danger btn-sm rounded-pill">
+            <i class="ph-file-pdf me-2"></i> Unduh PDF
             </a>
         @endif
         @endif
