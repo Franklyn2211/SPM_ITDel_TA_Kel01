@@ -25,6 +25,10 @@ Route::get('/login', [UnifiedAuthController::class, 'show'])->name('login');
 Route::post('/login', [UnifiedAuthController::class, 'login'])->name('login.do');
 Route::post('/logout', [UnifiedAuthController::class, 'logout'])->name('logout');
 
+// ==== Debug Route (remove in production) ====
+Route::get('/debug/pdf-export', [\App\Http\Controllers\DebugPdfController::class, 'check'])->name('debug.pdf');
+
+
 Route::prefix('auditee')->name('auditee.')->middleware(['auth', 'role:Ketua Program Studi|Dekan|Ketua PPKHA|SPM'])->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 

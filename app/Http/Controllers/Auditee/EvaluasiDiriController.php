@@ -91,7 +91,7 @@ class EvaluasiDiriController extends Controller
         $userCat = $this->resolveCategoryDetailId();
 
         $isSameUnit = $userCat && $form->category_detail_id === $userCat;
-        $isMember   = $this->currentUserIsFormMember($form);
+        $isMember = $this->currentUserIsFormMember($form);
 
         abort_unless($isSameUnit || $isMember, 403, 'Tidak berhak mengakses form ini.');
     }
@@ -161,11 +161,11 @@ class EvaluasiDiriController extends Controller
 
         foreach ($missing as $indId) {
             SelfEvaluationDetail::create([
-                'id'                     => SelfEvaluationDetail::generateNextId(),
-                'self_evaluation_form_id'=> $form->id,
+                'id' => SelfEvaluationDetail::generateNextId(),
+                'self_evaluation_form_id' => $form->id,
                 'ami_standard_indicator_id' => $indId,
-                'status_id'              => $statusDraftId,
-                'active'                 => true,
+                'status_id' => $statusDraftId,
+                'active' => true,
             ]);
         }
     }
@@ -175,24 +175,24 @@ class EvaluasiDiriController extends Controller
     public function index(Request $request)
     {
         $academic = $this->activeAcademic();
-        $user     = auth()->user();
-        $ur       = $this->currentUserRole();
+        $user = auth()->user();
+        $ur = $this->currentUserRole();
 
-        $categoryDetailId   = $ur?->category_detail_id;
-        $currentRoleId      = $ur?->role_id;
+        $categoryDetailId = $ur?->category_detail_id;
+        $currentRoleId = $ur?->role_id;
         $categoryDetailName = null;
-        $form               = null;
-        $details            = collect();
-        $progress           = ['total' => 0, 'terisi' => 0, 'percent' => 0.0];
-        $isMemberForm       = false;
+        $form = null;
+        $details = collect();
+        $progress = ['total' => 0, 'terisi' => 0, 'percent' => 0.0];
+        $isMemberForm = false;
 
         // param pencarian & filter
-        $q                  = trim((string) $request->input('q', ''));
+        $q = trim((string) $request->input('q', ''));
         $selectedStandardId = $request->input('standard_id');
-        $standards          = collect();
+        $standards = collect();
 
         // default untuk modal create
-        $defaultHeadName     = $user?->name ?? '';
+        $defaultHeadName = $user?->name ?? '';
         $defaultHeadPosition = optional($ur?->role)->name ?? '';
 
         if ($academic) {
@@ -216,9 +216,9 @@ class EvaluasiDiriController extends Controller
                     ->first();
 
                 if ($form) {
-                    $isMemberForm        = true;
-                    $categoryDetailId    = $form->category_detail_id;
-                    $defaultHeadName     = $form->head_auditee_name ?: $defaultHeadName;
+                    $isMemberForm = true;
+                    $categoryDetailId = $form->category_detail_id;
+                    $defaultHeadName = $form->head_auditee_name ?: $defaultHeadName;
                     $defaultHeadPosition = $form->head_auditee_position ?: $defaultHeadPosition;
                 }
             }
@@ -235,7 +235,7 @@ class EvaluasiDiriController extends Controller
             if ($form) {
                 // AMBIL DETAIL
                 if (!$isMemberForm && $currentRoleId) {
-                    DB::transaction(fn () => $this->syncDetailsWithPIC($form, $currentRoleId));
+                    DB::transaction(fn() => $this->syncDetailsWithPIC($form, $currentRoleId));
 
                     $allDetails = SelfEvaluationDetail::with(['indicator.standard', 'standardAchievement', 'updatedBy'])
                         ->where('self_evaluation_form_id', $form->id)
@@ -288,15 +288,15 @@ class EvaluasiDiriController extends Controller
                     ->values();
 
                 // PROGRESS GLOBAL
-                $total  = $allDetailsFull->count();
+                $total = $allDetailsFull->count();
                 $terisi = $allDetailsFull->filter(function ($d) {
                     $hasil = isset($d->result) ? trim((string) $d->result) : '';
                     return !is_null($d->standard_achievement_id) || $hasil !== '';
                 })->count();
 
                 $progress = [
-                    'total'   => $total,
-                    'terisi'  => $terisi,
+                    'total' => $total,
+                    'terisi' => $terisi,
                     'percent' => $total ? round(100 * $terisi / $total, 1) : 0.0,
                 ];
 
@@ -313,15 +313,15 @@ class EvaluasiDiriController extends Controller
                     $needle = Str::lower($q);
                     $filtered = $filtered->filter(function ($d) use ($needle) {
                         $desc = Str::lower(strip_tags($d->indicator->description ?? ''));
-                        $std  = Str::lower(optional($d->indicator->standard)->name ?? '');
+                        $std = Str::lower(optional($d->indicator->standard)->name ?? '');
                         return Str::contains($desc, $needle) || Str::contains($std, $needle);
                     })->values();
                 }
 
                 // PAGINATION
                 $totalFiltered = $filtered->count();
-                $perPage       = 10;
-                $currentPage   = LengthAwarePaginator::resolveCurrentPage();
+                $perPage = 10;
+                $currentPage = LengthAwarePaginator::resolveCurrentPage();
 
                 $currentItems = $filtered
                     ->slice(($currentPage - 1) * $perPage, $perPage)
@@ -333,7 +333,7 @@ class EvaluasiDiriController extends Controller
                     $perPage,
                     $currentPage,
                     [
-                        'path'  => $request->url(),
+                        'path' => $request->url(),
                         'query' => $request->query(),
                     ]
                 );
@@ -372,39 +372,40 @@ class EvaluasiDiriController extends Controller
 
     public function store(Request $request)
     {
-        $academicId      = $this->activeAcademicId();
-        $ur              = $this->currentUserRole();
-        $categoryDetailId= $ur?->category_detail_id;
-        $currentRoleId   = $ur?->role_id;
+        $academicId = $this->activeAcademicId();
+        $ur = $this->currentUserRole();
+        $categoryDetailId = $ur?->category_detail_id;
+        $currentRoleId = $ur?->role_id;
 
         if (!$academicId || !$categoryDetailId) {
             return redirect()->route('auditee.fed.index')->with(
                 'warning',
                 !$academicId
-                    ? 'Tahun akademik aktif belum diset oleh admin.'
-                    : 'Akun belum terhubung ke Unit/Prodi.'
+                ? 'Tahun akademik aktif belum diset oleh admin.'
+                : 'Akun belum terhubung ke Unit/Prodi.'
             );
         }
 
-        if (SelfEvaluationForm::where('academic_config_id', $academicId)
-            ->where('category_detail_id', $categoryDetailId)
-            ->exists()
+        if (
+            SelfEvaluationForm::where('academic_config_id', $academicId)
+                ->where('category_detail_id', $categoryDetailId)
+                ->exists()
         ) {
             return redirect()->route('auditee.fed.index')->with('info', 'Form sudah ada. Lanjutkan pengisian.');
         }
 
         $data = $request->validate([
-            'ketua_auditee_nama'            => ['nullable', 'string', 'max:255'],
-            'ketua_auditee_jabatan'         => ['nullable', 'string', 'max:255'],
+            'ketua_auditee_nama' => ['nullable', 'string', 'max:255'],
+            'ketua_auditee_jabatan' => ['nullable', 'string', 'max:255'],
 
-            'member_auditee_1_user_id'      => ['nullable', 'exists:users,id'],
-            'anggota_auditee_jabatan_satu'  => ['nullable', 'string', 'max:255'],
+            'member_auditee_1_user_id' => ['nullable', 'exists:users,id'],
+            'anggota_auditee_jabatan_satu' => ['nullable', 'string', 'max:255'],
 
-            'member_auditee_2_user_id'      => ['nullable', 'exists:users,id'],
-            'anggota_auditee_jabatan_dua'   => ['nullable', 'string', 'max:255'],
+            'member_auditee_2_user_id' => ['nullable', 'exists:users,id'],
+            'anggota_auditee_jabatan_dua' => ['nullable', 'string', 'max:255'],
 
-            'member_auditee_3_user_id'      => ['nullable', 'exists:users,id'],
-            'anggota_auditee_jabatan_tiga'  => ['nullable', 'string', 'max:255'],
+            'member_auditee_3_user_id' => ['nullable', 'exists:users,id'],
+            'anggota_auditee_jabatan_tiga' => ['nullable', 'string', 'max:255'],
         ]);
 
         DB::beginTransaction();
@@ -412,8 +413,8 @@ class EvaluasiDiriController extends Controller
             $statusDraftId = EvaluationStatus::where('name', 'Draft')->value('id');
 
             $currentUser = auth()->user();
-            $headName    = $data['ketua_auditee_nama'] ?: ($currentUser->name ?? null);
-            $headPos     = $data['ketua_auditee_jabatan'] ?: (optional($ur?->role)->name ?? null);
+            $headName = $data['ketua_auditee_nama'] ?: ($currentUser->name ?? null);
+            $headPos = $data['ketua_auditee_jabatan'] ?: (optional($ur?->role)->name ?? null);
 
             $member1Name = null;
             if (!empty($data['member_auditee_1_user_id'])) {
@@ -430,28 +431,28 @@ class EvaluasiDiriController extends Controller
                 $member3Name = optional(User::find($data['member_auditee_3_user_id']))->name;
             }
 
-            $form                       = new SelfEvaluationForm();
-            $form->id                   = SelfEvaluationForm::generateNextId();
-            $form->academic_config_id   = $academicId;
-            $form->category_detail_id   = $categoryDetailId;
-            $form->status_id            = $statusDraftId;
-            $form->active               = true;
+            $form = new SelfEvaluationForm();
+            $form->id = SelfEvaluationForm::generateNextId();
+            $form->academic_config_id = $academicId;
+            $form->category_detail_id = $categoryDetailId;
+            $form->status_id = $statusDraftId;
+            $form->active = true;
 
-            $form->head_auditee_name    = $headName;
-            $form->head_auditee_position= $headPos;
+            $form->head_auditee_name = $headName;
+            $form->head_auditee_position = $headPos;
 
-            $form->member_auditee_1_name     = $member1Name;
+            $form->member_auditee_1_name = $member1Name;
             $form->member_auditee_1_position = $data['anggota_auditee_jabatan_satu'] ?? null;
 
-            $form->member_auditee_2_name     = $member2Name;
+            $form->member_auditee_2_name = $member2Name;
             $form->member_auditee_2_position = $data['anggota_auditee_jabatan_dua'] ?? null;
 
-            $form->member_auditee_3_name     = $member3Name;
+            $form->member_auditee_3_name = $member3Name;
             $form->member_auditee_3_position = $data['anggota_auditee_jabatan_tiga'] ?? null;
 
-            $form->member_auditee_1_user_id  = $data['member_auditee_1_user_id'] ?? null;
-            $form->member_auditee_2_user_id  = $data['member_auditee_2_user_id'] ?? null;
-            $form->member_auditee_3_user_id  = $data['member_auditee_3_user_id'] ?? null;
+            $form->member_auditee_1_user_id = $data['member_auditee_1_user_id'] ?? null;
+            $form->member_auditee_2_user_id = $data['member_auditee_2_user_id'] ?? null;
+            $form->member_auditee_3_user_id = $data['member_auditee_3_user_id'] ?? null;
 
             $form->save();
 
@@ -476,11 +477,11 @@ class EvaluasiDiriController extends Controller
 
                 foreach ($picIds as $indId) {
                     SelfEvaluationDetail::create([
-                        'id'                        => SelfEvaluationDetail::generateNextId(),
-                        'self_evaluation_form_id'   => $form->id,
+                        'id' => SelfEvaluationDetail::generateNextId(),
+                        'self_evaluation_form_id' => $form->id,
                         'ami_standard_indicator_id' => $indId,
-                        'status_id'                 => $statusDraftId,
-                        'active'                    => true,
+                        'status_id' => $statusDraftId,
+                        'active' => true,
                     ]);
                 }
             }
@@ -504,65 +505,65 @@ class EvaluasiDiriController extends Controller
         }
 
         $data = $request->validate([
-            'ketua_auditee_nama'            => ['nullable', 'string', 'max:255'],
-            'ketua_auditee_jabatan'         => ['nullable', 'string', 'max:255'],
+            'ketua_auditee_nama' => ['nullable', 'string', 'max:255'],
+            'ketua_auditee_jabatan' => ['nullable', 'string', 'max:255'],
 
-            'member_auditee_1_user_id'      => ['nullable', 'exists:users,id'],
-            'anggota_auditee_jabatan_satu'  => ['nullable', 'string', 'max:255'],
+            'member_auditee_1_user_id' => ['nullable', 'exists:users,id'],
+            'anggota_auditee_jabatan_satu' => ['nullable', 'string', 'max:255'],
 
-            'member_auditee_2_user_id'      => ['nullable', 'exists:users,id'],
-            'anggota_auditee_jabatan_dua'   => ['nullable', 'string', 'max:255'],
+            'member_auditee_2_user_id' => ['nullable', 'exists:users,id'],
+            'anggota_auditee_jabatan_dua' => ['nullable', 'string', 'max:255'],
 
-            'member_auditee_3_user_id'      => ['nullable', 'exists:users,id'],
-            'anggota_auditee_jabatan_tiga'  => ['nullable', 'string', 'max:255'],
+            'member_auditee_3_user_id' => ['nullable', 'exists:users,id'],
+            'anggota_auditee_jabatan_tiga' => ['nullable', 'string', 'max:255'],
         ]);
 
         $headName = $data['ketua_auditee_nama'] ?: $form->head_auditee_name;
-        $headPos  = $data['ketua_auditee_jabatan'] ?: $form->head_auditee_position;
+        $headPos = $data['ketua_auditee_jabatan'] ?: $form->head_auditee_position;
 
         $member1Name = $form->member_auditee_1_name;
-        $member1Id   = $form->member_auditee_1_user_id;
+        $member1Id = $form->member_auditee_1_user_id;
 
         if (!empty($data['member_auditee_1_user_id'])) {
-            $u1          = User::find($data['member_auditee_1_user_id']);
+            $u1 = User::find($data['member_auditee_1_user_id']);
             $member1Name = optional($u1)->name;
-            $member1Id   = optional($u1)->id;
+            $member1Id = optional($u1)->id;
         }
         $member1Pos = $data['anggota_auditee_jabatan_satu'] ?? $form->member_auditee_1_position;
 
         $member2Name = $form->member_auditee_2_name;
-        $member2Id   = $form->member_auditee_2_user_id;
+        $member2Id = $form->member_auditee_2_user_id;
         if (!empty($data['member_auditee_2_user_id'])) {
-            $u2          = User::find($data['member_auditee_2_user_id']);
+            $u2 = User::find($data['member_auditee_2_user_id']);
             $member2Name = optional($u2)->name;
-            $member2Id   = optional($u2)->id;
+            $member2Id = optional($u2)->id;
         }
         $member2Pos = $data['anggota_auditee_jabatan_dua'] ?? $form->member_auditee_2_position;
 
         $member3Name = $form->member_auditee_3_name;
-        $member3Id   = $form->member_auditee_3_user_id;
+        $member3Id = $form->member_auditee_3_user_id;
         if (!empty($data['member_auditee_3_user_id'])) {
-            $u3          = User::find($data['member_auditee_3_user_id']);
+            $u3 = User::find($data['member_auditee_3_user_id']);
             $member3Name = optional($u3)->name;
-            $member3Id   = optional($u3)->id;
+            $member3Id = optional($u3)->id;
         }
         $member3Pos = $data['anggota_auditee_jabatan_tiga'] ?? $form->member_auditee_3_position;
 
         $form->update([
-            'head_auditee_name'          => $headName,
-            'head_auditee_position'      => $headPos,
+            'head_auditee_name' => $headName,
+            'head_auditee_position' => $headPos,
 
-            'member_auditee_1_name'      => $member1Name,
-            'member_auditee_1_position'  => $member1Pos,
-            'member_auditee_1_user_id'   => $member1Id,
+            'member_auditee_1_name' => $member1Name,
+            'member_auditee_1_position' => $member1Pos,
+            'member_auditee_1_user_id' => $member1Id,
 
-            'member_auditee_2_name'      => $member2Name,
-            'member_auditee_2_position'  => $member2Pos,
-            'member_auditee_2_user_id'   => $member2Id,
+            'member_auditee_2_name' => $member2Name,
+            'member_auditee_2_position' => $member2Pos,
+            'member_auditee_2_user_id' => $member2Id,
 
-            'member_auditee_3_name'      => $member3Name,
-            'member_auditee_3_position'  => $member3Pos,
-            'member_auditee_3_user_id'   => $member3Id,
+            'member_auditee_3_name' => $member3Name,
+            'member_auditee_3_position' => $member3Pos,
+            'member_auditee_3_user_id' => $member3Id,
         ]);
 
         return redirect()->route('auditee.fed.index')->with('success', 'Data auditee diperbarui.');
@@ -576,7 +577,7 @@ class EvaluasiDiriController extends Controller
             abort(404);
         }
 
-        $ur            = $this->currentUserRole();
+        $ur = $this->currentUserRole();
         $currentRoleId = $ur?->role_id;
 
         // cek hak edit
@@ -598,9 +599,9 @@ class EvaluasiDiriController extends Controller
         }
 
         $data = $request->validate([
-            'ketercapaian_standard_id'     => ['nullable', 'string', 'max:255'],
-            'hasil'                        => ['nullable', 'string'],
-            'bukti_pendukung'             => ['nullable', 'string'],
+            'ketercapaian_standard_id' => ['nullable', 'string', 'max:255'],
+            'hasil' => ['nullable', 'string'],
+            'bukti_pendukung' => ['nullable', 'string'],
             'faktor_penghambat_pendukung' => ['nullable', 'string'],
         ]);
 
@@ -608,10 +609,10 @@ class EvaluasiDiriController extends Controller
 
         $detail->update([
             'standard_achievement_id' => $data['ketercapaian_standard_id'] ?? null,
-            'result'                  => $data['hasil'] ?? null,
-            'supporting_evidence'     => $data['bukti_pendukung'] ?? null,
-            'contributing_factors'    => $data['faktor_penghambat_pendukung'] ?? null,
-            'status_id'               => $draftId,
+            'result' => $data['hasil'] ?? null,
+            'supporting_evidence' => $data['bukti_pendukung'] ?? null,
+            'contributing_factors' => $data['faktor_penghambat_pendukung'] ?? null,
+            'status_id' => $draftId,
             // updated_by di-handle di model (booted)
         ]);
 
@@ -630,7 +631,7 @@ class EvaluasiDiriController extends Controller
             return back()->with('info', 'Form sudah dikirim.');
         }
 
-        $ur            = $this->currentUserRole();
+        $ur = $this->currentUserRole();
         $currentRoleId = $ur?->role_id;
 
         $details = SelfEvaluationDetail::where('self_evaluation_form_id', $form->id)
@@ -651,10 +652,10 @@ class EvaluasiDiriController extends Controller
                             ->where('p.role_id', $currentRoleId);
                     });
             })
-            ->get(['standard_achievement_id', 'result']);
+            ->get();
 
         $incomplete = $details->filter(
-            fn ($d) =>
+            fn($d) =>
             is_null($d->standard_achievement_id)
             && (!isset($d->result) || trim($d->result) === '')
         )->count();
@@ -665,10 +666,17 @@ class EvaluasiDiriController extends Controller
             ]);
         }
 
+        // Update status_id in self_evaluation_forms
         $form->update([
-            'status_id'    => $submittedId,
+            'status_id' => $submittedId,
             'submitted_at' => now()->toDateString(),
         ]);
+
+        // Update status_id in self_evaluation_details for this form and role
+        $detailIds = $details->pluck('id');
+        if ($detailIds->count() > 0) {
+            SelfEvaluationDetail::whereIn('id', $detailIds)->update(['status_id' => $submittedId]);
+        }
 
         return redirect()->route('auditee.fed.index')->with('success', 'Form berhasil dikirim. Terima kasih!');
     }
@@ -702,8 +710,8 @@ class EvaluasiDiriController extends Controller
             $roleName = optional($ur?->role)->name ?? 'Anggota';
 
             return [
-                'id'        => $u->id,
-                'name'      => $u->name,
+                'id' => $u->id,
+                'name' => $u->name,
                 'role_name' => $roleName,
             ];
         });
@@ -711,655 +719,591 @@ class EvaluasiDiriController extends Controller
         return response()->json($results);
     }
 
-public function exportDoc(Request $request, SelfEvaluationForm $form): BinaryFileResponse
-{
-    $this->ensureFormOwnedByUser($form);
-    $this->ensureFormOnActiveYear($form);
+    public function exportDoc(Request $request, SelfEvaluationForm $form): BinaryFileResponse
+    {
+        $this->ensureFormOwnedByUser($form);
+        $this->ensureFormOnActiveYear($form);
 
-    $submittedId = EvaluationStatus::where('name', 'Dikirim')->value('id');
-    abort_unless($form->status_id === $submittedId, 403, 'Dokumen hanya tersedia setelah form dikirim.');
+        $submittedId = EvaluationStatus::where('name', 'Dikirim')->value('id');
+        abort_unless($form->status_id === $submittedId, 403, 'Dokumen hanya tersedia setelah form dikirim.');
 
-    if (!class_exists(\ZipArchive::class)) {
-        abort(500, 'PHP Zip extension belum aktif.');
-    }
-
-    $ur            = $this->currentUserRole();
-    $currentRoleId = $ur?->role_id;
-
-    // DETAIL SESUAI ROLE & TAHUN
-    $details = SelfEvaluationDetail::with(['indicator.standard', 'standardAchievement'])
-        ->where('self_evaluation_form_id', $form->id)
-        ->whereHas('indicator', function ($q) use ($form, $currentRoleId) {
-            $q->where('ami_standard_indicators.active', 1)
-                ->whereExists(function ($qq) use ($form) {
-                    $qq->select(DB::raw(1))
-                        ->from('ami_standards as s')
-                        ->whereColumn('s.id', 'ami_standard_indicators.standard_id')
-                        ->where('s.active', 1)
-                        ->where('s.academic_config_id', $form->academic_config_id);
-                })
-                ->whereExists(function ($qp) use ($currentRoleId) {
-                    $qp->select(DB::raw(1))
-                        ->from('ami_standard_indicator_pic as p')
-                        ->whereColumn('p.standard_indicator_id', 'ami_standard_indicators.id')
-                        ->where('p.active', 1)
-                        ->where('p.role_id', $currentRoleId);
-                });
-        })
-        ->orderBy('ami_standard_indicator_id')
-        ->get();
-
-    // ==== LOAD TEMPLATE ====
-    $templateAbsPath = storage_path('app/' . self::TEMPLATE_PATH);
-    if (!is_file($templateAbsPath)) {
-        abort(500, 'Template DOCX tidak ditemukan: ' . self::TEMPLATE_PATH);
-    }
-
-    $tp = new TemplateProcessor($templateAbsPath);
-
-    // ==== HEADER (AUDITEE, TA, DLL) ====
-    $taName   = optional($form->academicConfig)->name ?? '';
-    $unitName = optional($form->categoryDetail)->name ?? '';
-
-    $ketua      = trim(($form->head_auditee_position ?? '') . ' / ' . ($form->head_auditee_name ?? ''), ' /');
-    $namaketua  = trim($form->head_auditee_name ?? '');
-    $angg1      = trim(($form->member_auditee_1_position ?? '') . ' / ' . ($form->member_auditee_1_name ?? ''), ' /');
-    $angg2      = trim(($form->member_auditee_2_position ?? '') . ' / ' . ($form->member_auditee_2_name ?? ''), ' /');
-    $angg3      = trim(($form->member_auditee_3_position ?? '') . ' / ' . ($form->member_auditee_3_name ?? ''), ' /');
-
-    $tp->setValue('categoryDetail', $unitName);
-    $tp->setValue('ta', $taName);
-    $tp->setValue('ketua', $ketua ?: '');
-    $tp->setValue('namaketua', $namaketua ?: '');
-    $tp->setValue('anggota1', $angg1 ?: '');
-    $tp->setValue('anggota2', $angg2 ?: '');
-    $tp->setValue('anggota3', $angg3 ?: '');
-    $tp->setValue('tanggal', now()->format('d/m/Y'));
-
-    // ==== HELPER TEXT PLAIN ====
-    $cleanText = function (?string $value, string $fallback = ''): string {
-        $text = $value ?? '';
-
-        $text = strip_tags($text);
-        $text = html_entity_decode($text, ENT_QUOTES, 'UTF-8');
-        $text = preg_replace('/[^\P{C}\n]+/u', '', $text);
-        $text = preg_replace('/[\x00-\x1F\x7F]/u', '', $text);
-        $text = preg_replace('/\s+/u', ' ', $text);
-
-        $text = trim($text);
-
-        return $text === '' ? $fallback : $text;
-    };
-
-    $parseHtmlToTextRun = function (\PhpOffice\PhpWord\Element\TextRun $run, ?string $html) {
-        $html = $html ?? '';
-        if (trim($html) === '') {
-            return;
+        if (!class_exists(\ZipArchive::class)) {
+            abort(500, 'PHP Zip extension belum aktif.');
         }
 
-        $dom = new \DOMDocument();
-        $html = mb_convert_encoding($html, 'HTML-ENTITIES', 'UTF-8');
-        libxml_use_internal_errors(true);
-        $dom->loadHTML("<div>{$html}</div>", LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD);
-        libxml_clear_errors();
+        $ur = $this->currentUserRole();
+        $currentRoleId = $ur?->role_id;
 
-        $container = $dom->getElementsByTagName('div')->item(0);
-        if (!$container) {
-            $run->addText(strip_tags($html));
-            return;
+        // Ambil semua detail untuk form ini (baik ketua maupun anggota dapat mengunduh isi lengkap)
+        $details = SelfEvaluationDetail::with(['indicator.standard', 'standardAchievement'])
+            ->where('self_evaluation_form_id', $form->id)
+            ->whereHas('indicator', function ($q) use ($form) {
+                $q->where('ami_standard_indicators.active', 1)
+                    ->whereExists(function ($qq) use ($form) {
+                        $qq->select(DB::raw(1))
+                            ->from('ami_standards as s')
+                            ->whereColumn('s.id', 'ami_standard_indicators.standard_id')
+                            ->where('s.active', 1)
+                            ->where('s.academic_config_id', $form->academic_config_id);
+                    });
+            })
+            ->orderBy('ami_standard_indicator_id')
+            ->get();
+
+        // ==== LOAD TEMPLATE ====
+        $templateAbsPath = storage_path('app/' . self::TEMPLATE_PATH);
+        if (!is_file($templateAbsPath)) {
+            abort(500, 'Template DOCX tidak ditemukan: ' . self::TEMPLATE_PATH);
         }
 
-        // Closure rekursif untuk traverse
-        $traverse = function ($node, $style = [], $listContext = []) use (&$traverse, $run) {
-            if ($node->nodeType === XML_TEXT_NODE) {
-                // Text biasa
-                $text = $node->textContent;
-                if ($text !== '') {
-                    $run->addText($text, $style);
-                }
-                return;
-            }
+        $tp = new TemplateProcessor($templateAbsPath);
 
-            if ($node->nodeType !== XML_ELEMENT_NODE) {
-                return;
-            }
+        // ==== HEADER (AUDITEE, TA, DLL) ====
+        $taName = optional($form->academicConfig)->name ?? '';
+        $unitName = optional($form->categoryDetail)->name ?? '';
 
-            $tag = strtolower($node->nodeName);
+        $ketua = trim(($form->head_auditee_position ?? '') . ' / ' . ($form->head_auditee_name ?? ''), ' /');
+        $namaketua = trim($form->head_auditee_name ?? '');
+        $angg1 = trim(($form->member_auditee_1_position ?? '') . ' / ' . ($form->member_auditee_1_name ?? ''), ' /');
+        $angg2 = trim(($form->member_auditee_2_position ?? '') . ' / ' . ($form->member_auditee_2_name ?? ''), ' /');
+        $angg3 = trim(($form->member_auditee_3_position ?? '') . ' / ' . ($form->member_auditee_3_name ?? ''), ' /');
 
-            // Handle styling inline
-            if ($tag === 'b' || $tag === 'strong') {
-                $style['bold'] = true;
-            } elseif ($tag === 'i' || $tag === 'em') {
-                $style['italic'] = true;
-            } elseif ($tag === 'u') {
-                $style['underline'] = 'single';
-            }
+        $tp->setValue('categoryDetail', $unitName);
+        $tp->setValue('ta', $taName);
+        $tp->setValue('ketua', $ketua ?: '');
+        $tp->setValue('namaketua', $namaketua ?: '');
+        $tp->setValue('anggota1', $angg1 ?: '');
+        $tp->setValue('anggota2', $angg2 ?: '');
+        $tp->setValue('anggota3', $angg3 ?: '');
+        $tp->setValue('tanggal', now()->format('d/m/Y'));
 
-            // Handle Block & Splits
-            // P / DIV: jika bukan node pertama, beri break
-            if ($tag === 'p' || $tag === 'div') {
-                // Cek apakah node ini punya previous sibling text/element, kalau ya beri break
-               if ($node->previousSibling) {
-                   $run->addTextBreak();
-               }
-            }
-            if ($tag === 'br') {
-                $run->addTextBreak();
-                return;
-            }
+        // ==== HELPER TEXT PLAIN ====
+        $cleanText = function (?string $value, string $fallback = ''): string {
+            $text = $value ?? '';
 
-            // Handle LIST
-            if ($tag === 'ul' || $tag === 'ol') {
-                $idx = 1;
-                $depth = ($listContext['depth'] ?? 0) + 1;
-                $type  = $tag === 'ol'
-                    ? ($node->getAttribute('type') ?: '1')
-                    : 'ul';
+            $text = strip_tags($text);
+            $text = html_entity_decode($text, ENT_QUOTES, 'UTF-8');
+            $text = preg_replace('/[^\P{C}\n]+/u', '', $text);
+            $text = preg_replace('/[\x00-\x1F\x7F]/u', '', $text);
+            $text = preg_replace('/\s+/u', ' ', $text);
 
-                foreach ($node->childNodes as $child) {
-                    if (strtolower($child->nodeName) === 'li') {
-                        $traverse($child, $style, ['depth' => $depth, 'type' => $type, 'index' => $idx++]);
-                    }
-                }
-                return; // children processed manually
-            }
+            $text = trim($text);
 
-            // Handle LIST ITEM
-            if ($tag === 'li') {
-                $depth = $listContext['depth'] ?? 1;
-                $idx   = $listContext['index'] ?? 1;
-                $lType = $listContext['type']  ?? 'ul';
-
-                // Marker
-                $marker = '• ';
-                if ($lType !== 'ul') {
-                    if ($lType === 'a') {
-                        $alpha = chr(96 + (($idx - 1) % 26 + 1));
-                        $marker = "{$alpha}. ";
-                    } elseif ($lType === 'A') {
-                        $alpha = chr(64 + (($idx - 1) % 26 + 1));
-                        $marker = "{$alpha}. ";
-                    } else {
-                        $marker = "{$idx}. ";
-                    }
-                }
-
-                $run->addTextBreak(); // Item list selalu baris baru
-
-                // Indentasi manual dengan non-breaking space (utf-8 0xA0)
-                // 3 spasi per kedalaman
-                $nbsp = "\xC2\xA0";
-                $indentStr = str_repeat($nbsp . $nbsp . $nbsp, $depth);
-
-                $run->addText($indentStr . $marker, $style);
-
-                // Isi item
-                foreach ($node->childNodes as $child) {
-                    $traverse($child, $style, $listContext);
-                }
-                return;
-            }
-
-            // Handle LINK
-            if ($tag === 'a') {
-                $href = $node->getAttribute('href');
-                $inner = $node->textContent;
-                if ($href) {
-                     // Gunakan addLink biasa.
-                     // Note: TemplateProcessor kadang tidak otomatis bind rels untuk link baru di dalam block.
-                     // Tetapi error 'Invalid type HYPERLINK' terjadi karena addField memvalidasi tipe filed yg didukung.
-                     // Jika addLink tidak clickable di output akhir karena limitasi TemplateProcessor,
-                     // setidaknya tidak error 500.
-                     $linkStyle = array_merge($style, ['color' => '0000FF', 'underline' => 'single']);
-                     $run->addLink($href, $inner, $linkStyle);
-                     return;
-                }
-            }
-
-            // Recurse generic
-            foreach ($node->childNodes as $child) {
-                $traverse($child, $style, $listContext);
-            }
+            return $text === '' ? $fallback : $text;
         };
 
-        $traverse($container);
-    };
-
-    // ==== SUSUN DATA UNTUK cloneRow ====
-    $rows        = [];
-    // Kita simpan raw values untuk plain text di cloneRow (opsi jika layout tabel simple)
-    // Tapi karena pakai setComplexBlock, array ini lebih ke metadata row count & flag
-
-    // Kita butuh TextRun object untuk setiap sel yg kompleks
-    $standarBlocks = [];
-    $hasilBlocks   = [];
-    $faktorBlocks  = [];
-
-    foreach ($details as $i => $d) {
-        $index = $i + 1;
-
-        // 1. Standar Block
-        $stdRun = new TextRun();
-        $stdName = trim(strip_tags($d->indicator->standard->name ?? ''));
-        if ($stdName) {
-            $stdRun->addText($stdName, ['bold' => true]);
-            $stdRun->addTextBreak();
-        }
-        // Deskripsi Indikator
-        $parseHtmlToTextRun($stdRun, $d->indicator->description ?? '');
-        $standarBlocks[$index] = $stdRun;
-
-        // 2. Hasil Block
-        $resRun = new TextRun();
-        $parseHtmlToTextRun($resRun, $d->result ?? '');
-        $hasilBlocks[$index] = $resRun;
-
-        // 3. Faktor Block
-        $fakRun = new TextRun();
-        $parseHtmlToTextRun($fakRun, $d->contributing_factors ?? '');
-        $faktorBlocks[$index] = $fakRun;
-
-        // Data simplerow
-        $flag = strtolower(optional($d->standardAchievement)->name ?? '');
-        $picRoleNames = DB::table('ami_standard_indicator_pic as p')
-            ->join('roles as r', 'r.id', '=', 'p.role_id')
-            ->where('p.standard_indicator_id', $d->ami_standard_indicator_id)
-            ->where('p.active', 1)
-            ->pluck('r.name')
-            ->unique()
-            ->implode(', ');
-
-        $rows[] = [
-            'no'             => (string) $index,
-            'sumber'         => $cleanText($picRoleNames, ''),
-            'melampaui'      => $flag === 'melampaui' ? '✓' : '',
-            'mencapai'       => $flag === 'mencapai' ? '✓' : '',
-            'tidak_mencapai' => $flag === 'tidak mencapai' ? '✓' : '',
-            'menyimpang'     => $flag === 'menyimpang' ? '✓' : '',
-        ];
-    }
-
-    // Clone baris berdasarkan placeholder ${no}
-    $tp->cloneRowAndSetValues('no', $rows);
-
-    // ==== ISI KOLUMN STANDAR, HASIL, FAKTOR PAKAI COMPLEX BLOCK ====
-    foreach ($rows as $idx => $_) {
-        $i = $idx + 1;
-
-        if (isset($standarBlocks[$i])) {
-            $tp->setComplexBlock("standar#{$i}", $standarBlocks[$i]);
-        }
-        if (isset($hasilBlocks[$i])) {
-            $tp->setComplexBlock("hasil#{$i}", $hasilBlocks[$i]);
-        }
-        if (isset($faktorBlocks[$i])) {
-            $tp->setComplexBlock("faktor#{$i}", $faktorBlocks[$i]);
-        }
-    }
-
-    // ==== SIMPAN & DOWNLOAD ====
-    $safe = function (string $name): string {
-        $name = preg_replace('/[\\\\\\/\\:\\*\\?\\"\\<\\>\\|]+/', '', $name);
-        $name = trim(preg_replace('/\\s+/', ' ', $name));
-        return Str::limit($name, 120, '');
-    };
-
-    $safeUnit = $safe($unitName ?: 'Unit');
-    $filename = "F-219_Formulir_Evaluasi_Diri_{$safeUnit}.docx";
-
-    $tmpDir = storage_path('app/tmp');
-    if (!is_dir($tmpDir)) {
-        @mkdir($tmpDir, 0775, true);
-    }
-
-    $target = rtrim($tmpDir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $filename;
-    if (file_exists($target)) {
-        @unlink($target);
-    }
-
-    try {
-    $tp->saveAs($target);
-} catch (\Throwable $e) {
-    logger()->error('EXPORT DOCX FAILED', [
-        'message' => $e->getMessage(),
-        'trace'   => $e->getTraceAsString(),
-    ]);
-    throw $e;
-}
-
-
-    return response()->download($target, $filename)->deleteFileAfterSend(true);
-}
-
-/**
- * Export Form Evaluasi Diri ke PDF menggunakan ConvertAPI
- * Generates DOCX first then converts to PDF for 100% identical output
- */
-public function exportPdf(Request $request, SelfEvaluationForm $form): BinaryFileResponse
-{
-    $this->ensureFormOwnedByUser($form);
-    $this->ensureFormOnActiveYear($form);
-
-    $submittedId = EvaluationStatus::where('name', 'Dikirim')->value('id');
-    abort_unless($form->status_id === $submittedId, 403, 'Dokumen hanya tersedia setelah form dikirim.');
-
-    // Check ConvertAPI secret is configured
-    $convertApiSecret = env('CONVERTAPI_SECRET');
-    if (empty($convertApiSecret)) {
-        abort(500, 'CONVERTAPI_SECRET belum dikonfigurasi. Silakan set di file .env');
-    }
-
-    if (!class_exists(\ZipArchive::class)) {
-        abort(500, 'PHP Zip extension belum aktif.');
-    }
-
-    $ur            = $this->currentUserRole();
-    $currentRoleId = $ur?->role_id;
-
-    // DETAIL SESUAI ROLE & TAHUN (same logic as exportDoc)
-    $details = SelfEvaluationDetail::with(['indicator.standard', 'standardAchievement'])
-        ->where('self_evaluation_form_id', $form->id)
-        ->whereHas('indicator', function ($q) use ($form, $currentRoleId) {
-            $q->where('ami_standard_indicators.active', 1)
-                ->whereExists(function ($qq) use ($form) {
-                    $qq->select(DB::raw(1))
-                        ->from('ami_standards as s')
-                        ->whereColumn('s.id', 'ami_standard_indicators.standard_id')
-                        ->where('s.active', 1)
-                        ->where('s.academic_config_id', $form->academic_config_id);
-                })
-                ->whereExists(function ($qp) use ($currentRoleId) {
-                    $qp->select(DB::raw(1))
-                        ->from('ami_standard_indicator_pic as p')
-                        ->whereColumn('p.standard_indicator_id', 'ami_standard_indicators.id')
-                        ->where('p.active', 1)
-                        ->where('p.role_id', $currentRoleId);
-                });
-        })
-        ->orderBy('ami_standard_indicator_id')
-        ->get();
-
-    // ==== LOAD TEMPLATE (same as exportDoc) ====
-    $templateAbsPath = storage_path('app/' . self::TEMPLATE_PATH);
-    if (!is_file($templateAbsPath)) {
-        abort(500, 'Template DOCX tidak ditemukan: ' . self::TEMPLATE_PATH);
-    }
-
-    $tp = new TemplateProcessor($templateAbsPath);
-
-    // ==== HEADER (AUDITEE, TA, DLL) ====
-    $taName   = optional($form->academicConfig)->name ?? '';
-    $unitName = optional($form->categoryDetail)->name ?? '';
-
-    $ketua      = trim(($form->head_auditee_position ?? '') . ' / ' . ($form->head_auditee_name ?? ''), ' /');
-    $namaketua  = trim($form->head_auditee_name ?? '');
-    $angg1      = trim(($form->member_auditee_1_position ?? '') . ' / ' . ($form->member_auditee_1_name ?? ''), ' /');
-    $angg2      = trim(($form->member_auditee_2_position ?? '') . ' / ' . ($form->member_auditee_2_name ?? ''), ' /');
-    $angg3      = trim(($form->member_auditee_3_position ?? '') . ' / ' . ($form->member_auditee_3_name ?? ''), ' /');
-
-    $tp->setValue('categoryDetail', $unitName);
-    $tp->setValue('ta', $taName);
-    $tp->setValue('ketua', $ketua ?: '');
-    $tp->setValue('namaketua', $namaketua ?: '');
-    $tp->setValue('anggota1', $angg1 ?: '');
-    $tp->setValue('anggota2', $angg2 ?: '');
-    $tp->setValue('anggota3', $angg3 ?: '');
-    $tp->setValue('tanggal', now()->format('d/m/Y'));
-
-    // ==== HELPER TEXT PLAIN ====
-    $cleanText = function (?string $value, string $fallback = ''): string {
-        $text = $value ?? '';
-        $text = strip_tags($text);
-        $text = html_entity_decode($text, ENT_QUOTES, 'UTF-8');
-        $text = preg_replace('/[^\P{C}\n]+/u', '', $text);
-        $text = preg_replace('/[\x00-\x1F\x7F]/u', '', $text);
-        $text = preg_replace('/\s+/u', ' ', $text);
-        $text = trim($text);
-        return $text === '' ? $fallback : $text;
-    };
-
-    $parseHtmlToTextRun = function (\PhpOffice\PhpWord\Element\TextRun $run, ?string $html) {
-        $html = $html ?? '';
-        if (trim($html) === '') {
-            return;
-        }
-
-        $dom = new \DOMDocument();
-        $html = mb_convert_encoding($html, 'HTML-ENTITIES', 'UTF-8');
-        libxml_use_internal_errors(true);
-        $dom->loadHTML("<div>{$html}</div>", LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD);
-        libxml_clear_errors();
-
-        $container = $dom->getElementsByTagName('div')->item(0);
-        if (!$container) {
-            $run->addText(strip_tags($html));
-            return;
-        }
-
-        $traverse = function ($node, $style = [], $listContext = []) use (&$traverse, $run) {
-            if ($node->nodeType === XML_TEXT_NODE) {
-                $text = $node->textContent;
-                if ($text !== '') {
-                    $run->addText($text, $style);
-                }
+        $parseHtmlToTextRun = function (\PhpOffice\PhpWord\Element\TextRun $run, ?string $html) {
+            $html = $html ?? '';
+            if (trim($html) === '') {
                 return;
             }
 
-            if ($node->nodeType !== XML_ELEMENT_NODE) {
+            $dom = new \DOMDocument();
+            $html = mb_convert_encoding($html, 'HTML-ENTITIES', 'UTF-8');
+            libxml_use_internal_errors(true);
+            $dom->loadHTML("<div>{$html}</div>", LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD);
+            libxml_clear_errors();
+
+            $container = $dom->getElementsByTagName('div')->item(0);
+            if (!$container) {
+                $run->addText(strip_tags($html));
                 return;
             }
 
-            $tag = strtolower($node->nodeName);
-
-            if ($tag === 'b' || $tag === 'strong') {
-                $style['bold'] = true;
-            } elseif ($tag === 'i' || $tag === 'em') {
-                $style['italic'] = true;
-            } elseif ($tag === 'u') {
-                $style['underline'] = 'single';
-            }
-
-            if ($tag === 'p' || $tag === 'div') {
-                if ($node->previousSibling) {
-                    $run->addTextBreak();
-                }
-            }
-            if ($tag === 'br') {
-                $run->addTextBreak();
-                return;
-            }
-
-            if ($tag === 'ul' || $tag === 'ol') {
-                $idx = 1;
-                $depth = ($listContext['depth'] ?? 0) + 1;
-                $type  = $tag === 'ol'
-                    ? ($node->getAttribute('type') ?: '1')
-                    : 'ul';
-
-                foreach ($node->childNodes as $child) {
-                    if (strtolower($child->nodeName) === 'li') {
-                        $traverse($child, $style, ['depth' => $depth, 'type' => $type, 'index' => $idx++]);
+            // Closure rekursif untuk traverse
+            $traverse = function ($node, $style = [], $listContext = []) use (&$traverse, $run) {
+                if ($node->nodeType === XML_TEXT_NODE) {
+                    // Text biasa
+                    $text = $node->textContent;
+                    if ($text !== '') {
+                        $run->addText($text, $style);
                     }
-                }
-                return;
-            }
-
-            if ($tag === 'li') {
-                $depth = $listContext['depth'] ?? 1;
-                $idx   = $listContext['index'] ?? 1;
-                $lType = $listContext['type']  ?? 'ul';
-
-                $marker = '• ';
-                if ($lType !== 'ul') {
-                    if ($lType === 'a') {
-                        $alpha = chr(96 + (($idx - 1) % 26 + 1));
-                        $marker = "{$alpha}. ";
-                    } elseif ($lType === 'A') {
-                        $alpha = chr(64 + (($idx - 1) % 26 + 1));
-                        $marker = "{$alpha}. ";
-                    } else {
-                        $marker = "{$idx}. ";
-                    }
-                }
-
-                $run->addTextBreak();
-                $nbsp = "\xC2\xA0";
-                $indentStr = str_repeat($nbsp . $nbsp . $nbsp, $depth);
-                $run->addText($indentStr . $marker, $style);
-
-                foreach ($node->childNodes as $child) {
-                    $traverse($child, $style, $listContext);
-                }
-                return;
-            }
-
-            if ($tag === 'a') {
-                $href = $node->getAttribute('href');
-                $inner = $node->textContent;
-                if ($href) {
-                    $linkStyle = array_merge($style, ['color' => '0000FF', 'underline' => 'single']);
-                    $run->addLink($href, $inner, $linkStyle);
                     return;
                 }
-            }
 
-            foreach ($node->childNodes as $child) {
-                $traverse($child, $style, $listContext);
-            }
+                if ($node->nodeType !== XML_ELEMENT_NODE) {
+                    return;
+                }
+
+                $tag = strtolower($node->nodeName);
+
+                // Handle styling inline
+                if ($tag === 'b' || $tag === 'strong') {
+                    $style['bold'] = true;
+                } elseif ($tag === 'i' || $tag === 'em') {
+                    $style['italic'] = true;
+                } elseif ($tag === 'u') {
+                    $style['underline'] = 'single';
+                }
+
+                // Handle Block & Splits
+                // P / DIV: jika bukan node pertama, beri break
+                if ($tag === 'p' || $tag === 'div') {
+                    // Cek apakah node ini punya previous sibling text/element, kalau ya beri break
+                    if ($node->previousSibling) {
+                        $run->addTextBreak();
+                    }
+                }
+                if ($tag === 'br') {
+                    $run->addTextBreak();
+                    return;
+                }
+
+                // Handle LIST
+                if ($tag === 'ul' || $tag === 'ol') {
+                    $idx = 1;
+                    $depth = ($listContext['depth'] ?? 0) + 1;
+                    $type = $tag === 'ol'
+                        ? ($node->getAttribute('type') ?: '1')
+                        : 'ul';
+
+                    foreach ($node->childNodes as $child) {
+                        if (strtolower($child->nodeName) === 'li') {
+                            $traverse($child, $style, ['depth' => $depth, 'type' => $type, 'index' => $idx++]);
+                        }
+                    }
+                    return; // children processed manually
+                }
+
+                // Handle LIST ITEM
+                if ($tag === 'li') {
+                    $depth = $listContext['depth'] ?? 1;
+                    $idx = $listContext['index'] ?? 1;
+                    $lType = $listContext['type'] ?? 'ul';
+
+                    // Marker
+                    $marker = '• ';
+                    if ($lType !== 'ul') {
+                        if ($lType === 'a') {
+                            $alpha = chr(96 + (($idx - 1) % 26 + 1));
+                            $marker = "{$alpha}. ";
+                        } elseif ($lType === 'A') {
+                            $alpha = chr(64 + (($idx - 1) % 26 + 1));
+                            $marker = "{$alpha}. ";
+                        } else {
+                            $marker = "{$idx}. ";
+                        }
+                    }
+
+                    $run->addTextBreak(); // Item list selalu baris baru
+
+                    // Indentasi manual dengan non-breaking space (utf-8 0xA0)
+                    // 3 spasi per kedalaman
+                    $nbsp = "\xC2\xA0";
+                    $indentStr = str_repeat($nbsp . $nbsp . $nbsp, $depth);
+
+                    $run->addText($indentStr . $marker, $style);
+
+                    // Isi item
+                    foreach ($node->childNodes as $child) {
+                        $traverse($child, $style, $listContext);
+                    }
+                    return;
+                }
+
+                // Handle LINK
+                if ($tag === 'a') {
+                    $href = $node->getAttribute('href');
+                    $inner = $node->textContent;
+                    if ($href) {
+                        // Gunakan addLink biasa.
+                        // Note: TemplateProcessor kadang tidak otomatis bind rels untuk link baru di dalam block.
+                        // Tetapi error 'Invalid type HYPERLINK' terjadi karena addField memvalidasi tipe filed yg didukung.
+                        // Jika addLink tidak clickable di output akhir karena limitasi TemplateProcessor,
+                        // setidaknya tidak error 500.
+                        $linkStyle = array_merge($style, ['color' => '0000FF', 'underline' => 'single']);
+                        $run->addLink($href, $inner, $linkStyle);
+                        return;
+                    }
+                }
+
+                // Recurse generic
+                foreach ($node->childNodes as $child) {
+                    $traverse($child, $style, $listContext);
+                }
+            };
+
+            $traverse($container);
         };
 
-        $traverse($container);
-    };
+        // ==== SUSUN DATA UNTUK cloneRow ====
+        $rows = [];
+        // Kita simpan raw values untuk plain text di cloneRow (opsi jika layout tabel simple)
+        // Tapi karena pakai setComplexBlock, array ini lebih ke metadata row count & flag
 
-    // ==== SUSUN DATA UNTUK cloneRow ====
-    $rows        = [];
-    $standarBlocks = [];
-    $hasilBlocks   = [];
-    $faktorBlocks  = [];
+        // Kita butuh TextRun object untuk setiap sel yg kompleks
+        $standarBlocks = [];
+        $hasilBlocks = [];
+        $faktorBlocks = [];
 
-    foreach ($details as $i => $d) {
-        $index = $i + 1;
+        foreach ($details as $i => $d) {
+            $index = $i + 1;
 
-        $stdRun = new TextRun();
-        $stdName = trim(strip_tags($d->indicator->standard->name ?? ''));
-        if ($stdName) {
-            $stdRun->addText($stdName, ['bold' => true]);
-            $stdRun->addTextBreak();
+            // 1. Standar Block
+            $stdRun = new TextRun();
+            $stdName = trim(strip_tags($d->indicator->standard->name ?? ''));
+            if ($stdName) {
+                $stdRun->addText($stdName, ['bold' => true]);
+                $stdRun->addTextBreak();
+            }
+            // Deskripsi Indikator
+            $parseHtmlToTextRun($stdRun, $d->indicator->description ?? '');
+            $standarBlocks[$index] = $stdRun;
+
+            // 2. Hasil Block
+            $resRun = new TextRun();
+            $parseHtmlToTextRun($resRun, $d->result ?? '');
+            $hasilBlocks[$index] = $resRun;
+
+            // 3. Faktor Block
+            $fakRun = new TextRun();
+            $parseHtmlToTextRun($fakRun, $d->contributing_factors ?? '');
+            $faktorBlocks[$index] = $fakRun;
+
+            // Data simplerow
+            $flag = strtolower(optional($d->standardAchievement)->name ?? '');
+            $picRoleNames = DB::table('ami_standard_indicator_pic as p')
+                ->join('roles as r', 'r.id', '=', 'p.role_id')
+                ->where('p.standard_indicator_id', $d->ami_standard_indicator_id)
+                ->where('p.active', 1)
+                ->pluck('r.name')
+                ->unique()
+                ->implode(', ');
+
+            $rows[] = [
+                'no' => (string) $index,
+                'sumber' => $cleanText($picRoleNames, ''),
+                'melampaui' => $flag === 'melampaui' ? '✓' : '',
+                'mencapai' => $flag === 'mencapai' ? '✓' : '',
+                'tidak_mencapai' => $flag === 'tidak mencapai' ? '✓' : '',
+                'menyimpang' => $flag === 'menyimpang' ? '✓' : '',
+            ];
         }
-        $parseHtmlToTextRun($stdRun, $d->indicator->description ?? '');
-        $standarBlocks[$index] = $stdRun;
 
-        $resRun = new TextRun();
-        $parseHtmlToTextRun($resRun, $d->result ?? '');
-        $hasilBlocks[$index] = $resRun;
+        // Clone baris berdasarkan placeholder ${no}
+        $tp->cloneRowAndSetValues('no', $rows);
 
-        $fakRun = new TextRun();
-        $parseHtmlToTextRun($fakRun, $d->contributing_factors ?? '');
-        $faktorBlocks[$index] = $fakRun;
+        // ==== ISI KOLUMN STANDAR, HASIL, FAKTOR PAKAI COMPLEX BLOCK ====
+        foreach ($rows as $idx => $_) {
+            $i = $idx + 1;
 
-        $flag = strtolower(optional($d->standardAchievement)->name ?? '');
-        $picRoleNames = DB::table('ami_standard_indicator_pic as p')
-            ->join('roles as r', 'r.id', '=', 'p.role_id')
-            ->where('p.standard_indicator_id', $d->ami_standard_indicator_id)
-            ->where('p.active', 1)
-            ->pluck('r.name')
-            ->unique()
-            ->implode(', ');
-
-        $rows[] = [
-            'no'             => (string) $index,
-            'sumber'         => $cleanText($picRoleNames, ''),
-            'melampaui'      => $flag === 'melampaui' ? '✓' : '',
-            'mencapai'       => $flag === 'mencapai' ? '✓' : '',
-            'tidak_mencapai' => $flag === 'tidak mencapai' ? '✓' : '',
-            'menyimpang'     => $flag === 'menyimpang' ? '✓' : '',
-        ];
-    }
-
-    $tp->cloneRowAndSetValues('no', $rows);
-
-    foreach ($rows as $idx => $_) {
-        $i = $idx + 1;
-        if (isset($standarBlocks[$i])) {
-            $tp->setComplexBlock("standar#{$i}", $standarBlocks[$i]);
-        }
-        if (isset($hasilBlocks[$i])) {
-            $tp->setComplexBlock("hasil#{$i}", $hasilBlocks[$i]);
-        }
-        if (isset($faktorBlocks[$i])) {
-            $tp->setComplexBlock("faktor#{$i}", $faktorBlocks[$i]);
-        }
-    }
-
-    // ==== SIMPAN DOCX SEMENTARA ====
-    $safe = function (string $name): string {
-        $name = preg_replace('/[\\\\\\/:*?"<>|]+/', '', $name);
-        $name = trim(preg_replace('/\s+/', ' ', $name));
-        return Str::limit($name, 120, '');
-    };
-
-    $safeUnit = $safe($unitName ?: 'Unit');
-    $docxFilename = "F-219_Formulir_Evaluasi_Diri_{$safeUnit}.docx";
-    $pdfFilename = "F-219_Formulir_Evaluasi_Diri_{$safeUnit}.pdf";
-
-    $tmpDir = storage_path('app/tmp');
-    if (!is_dir($tmpDir)) {
-        @mkdir($tmpDir, 0775, true);
-    }
-
-    $docxPath = rtrim($tmpDir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $docxFilename;
-    $pdfPath = rtrim($tmpDir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $pdfFilename;
-
-    if (file_exists($docxPath)) {
-        @unlink($docxPath);
-    }
-    if (file_exists($pdfPath)) {
-        @unlink($pdfPath);
-    }
-
-    $tp->saveAs($docxPath);
-
-    // ==== CONVERT DOCX TO PDF USING CONVERTAPI ====
-    try {
-        ConvertApi::setApiCredentials($convertApiSecret);
-
-        $result = ConvertApi::convert('pdf', [
-            'File' => $docxPath,
-        ], 'docx');
-
-        // Save the converted PDF
-        $result->saveFiles($tmpDir);
-
-        // ConvertAPI saves with original name but .pdf extension
-        // Check if file exists, if not try to find it
-        if (!file_exists($pdfPath)) {
-            // Look for any PDF file just created
-            $files = glob($tmpDir . '/*.pdf');
-            if (!empty($files)) {
-                // Get the most recently created PDF
-                usort($files, function($a, $b) {
-                    return filemtime($b) - filemtime($a);
-                });
-                $convertedPdf = $files[0];
-                if ($convertedPdf !== $pdfPath) {
-                    rename($convertedPdf, $pdfPath);
-                }
+            if (isset($standarBlocks[$i])) {
+                $tp->setComplexBlock("standar#{$i}", $standarBlocks[$i]);
+            }
+            if (isset($hasilBlocks[$i])) {
+                $tp->setComplexBlock("hasil#{$i}", $hasilBlocks[$i]);
+            }
+            if (isset($faktorBlocks[$i])) {
+                $tp->setComplexBlock("faktor#{$i}", $faktorBlocks[$i]);
             }
         }
 
-        // Clean up DOCX temp file
-        if (file_exists($docxPath)) {
-            @unlink($docxPath);
+        // ==== SIMPAN & DOWNLOAD ====
+        $safe = function (string $name): string {
+            $name = preg_replace('/[\\\\\\/\\:\\*\\?\\"\\<\\>\\|]+/', '', $name);
+            $name = trim(preg_replace('/\\s+/', ' ', $name));
+            return Str::limit($name, 120, '');
+        };
+
+        $safeUnit = $safe($unitName ?: 'Unit');
+        $filename = "F-219_Formulir_Evaluasi_Diri_{$safeUnit}.docx";
+
+        $tmpDir = storage_path('app/tmp');
+        if (!is_dir($tmpDir)) {
+            @mkdir($tmpDir, 0775, true);
         }
 
-        if (!file_exists($pdfPath)) {
-            abort(500, 'Gagal mengkonversi dokumen ke PDF.');
+        $target = rtrim($tmpDir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $filename;
+        if (file_exists($target)) {
+            @unlink($target);
         }
 
-        return response()->download($pdfPath, $pdfFilename)->deleteFileAfterSend(true);
+        try {
+            $tp->saveAs($target);
+        } catch (\Throwable $e) {
+            logger()->error('EXPORT DOCX FAILED', [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            throw $e;
+        }
 
-    } catch (\Exception $e) {
-        // Clean up temp files on error
+
+        return response()->download($target, $filename)->deleteFileAfterSend(true);
+    }
+
+    /**
+     * Export Form Evaluasi Diri ke PDF menggunakan ConvertAPI
+     * Generates DOCX first then converts to PDF for 100% identical output
+     */
+    public function exportPdf(Request $request, SelfEvaluationForm $form): BinaryFileResponse
+    {
+        $this->ensureFormOwnedByUser($form);
+        $this->ensureFormOnActiveYear($form);
+
+        $submittedId = EvaluationStatus::where('name', 'Dikirim')->value('id');
+        abort_unless($form->status_id === $submittedId, 403, 'Dokumen hanya tersedia setelah form dikirim.');
+
+        // Check ConvertAPI secret is configured
+        $convertApiSecret = env('CONVERTAPI_SECRET');
+        if (empty($convertApiSecret)) {
+            abort(500, 'CONVERTAPI_SECRET belum dikonfigurasi. Silakan set di file .env');
+        }
+
+        if (!class_exists(\ZipArchive::class)) {
+            abort(500, 'PHP Zip extension belum aktif.');
+        }
+
+        $ur = $this->currentUserRole();
+        $currentRoleId = $ur?->role_id;
+
+        // Ambil semua detail untuk form ini (baik ketua maupun anggota dapat mengunduh isi lengkap)
+        $details = SelfEvaluationDetail::with(['indicator.standard', 'standardAchievement'])
+            ->where('self_evaluation_form_id', $form->id)
+            ->whereHas('indicator', function ($q) use ($form) {
+                $q->where('ami_standard_indicators.active', 1)
+                    ->whereExists(function ($qq) use ($form) {
+                        $qq->select(DB::raw(1))
+                            ->from('ami_standards as s')
+                            ->whereColumn('s.id', 'ami_standard_indicators.standard_id')
+                            ->where('s.active', 1)
+                            ->where('s.academic_config_id', $form->academic_config_id);
+                    });
+            })
+            ->orderBy('ami_standard_indicator_id')
+            ->get();
+
+        // ==== LOAD TEMPLATE (same as exportDoc) ====
+        $templateAbsPath = storage_path('app/' . self::TEMPLATE_PATH);
+        if (!is_file($templateAbsPath)) {
+            abort(500, 'Template DOCX tidak ditemukan: ' . self::TEMPLATE_PATH);
+        }
+
+        $tp = new TemplateProcessor($templateAbsPath);
+
+        // ==== HEADER (AUDITEE, TA, DLL) ====
+        $taName = optional($form->academicConfig)->name ?? '';
+        $unitName = optional($form->categoryDetail)->name ?? '';
+
+        $ketua = trim(($form->head_auditee_position ?? '') . ' / ' . ($form->head_auditee_name ?? ''), ' /');
+        $namaketua = trim($form->head_auditee_name ?? '');
+        $angg1 = trim(($form->member_auditee_1_position ?? '') . ' / ' . ($form->member_auditee_1_name ?? ''), ' /');
+        $angg2 = trim(($form->member_auditee_2_position ?? '') . ' / ' . ($form->member_auditee_2_name ?? ''), ' /');
+        $angg3 = trim(($form->member_auditee_3_position ?? '') . ' / ' . ($form->member_auditee_3_name ?? ''), ' /');
+
+        $tp->setValue('categoryDetail', $unitName);
+        $tp->setValue('ta', $taName);
+        $tp->setValue('ketua', $ketua ?: '');
+        $tp->setValue('namaketua', $namaketua ?: '');
+        $tp->setValue('anggota1', $angg1 ?: '');
+        $tp->setValue('anggota2', $angg2 ?: '');
+        $tp->setValue('anggota3', $angg3 ?: '');
+        $tp->setValue('tanggal', now()->format('d/m/Y'));
+
+        // ==== HELPER TEXT PLAIN ====
+        $cleanText = function (?string $value, string $fallback = ''): string {
+            $text = $value ?? '';
+            $text = strip_tags($text);
+            $text = html_entity_decode($text, ENT_QUOTES, 'UTF-8');
+            $text = preg_replace('/[^\P{C}\n]+/u', '', $text);
+            $text = preg_replace('/[\x00-\x1F\x7F]/u', '', $text);
+            $text = preg_replace('/\s+/u', ' ', $text);
+            $text = trim($text);
+            return $text === '' ? $fallback : $text;
+        };
+
+        $parseHtmlToTextRun = function (\PhpOffice\PhpWord\Element\TextRun $run, ?string $html) {
+            $html = $html ?? '';
+            if (trim($html) === '') {
+                return;
+            }
+
+            $dom = new \DOMDocument();
+            $html = mb_convert_encoding($html, 'HTML-ENTITIES', 'UTF-8');
+            libxml_use_internal_errors(true);
+            $dom->loadHTML("<div>{$html}</div>", LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD);
+            libxml_clear_errors();
+
+            $container = $dom->getElementsByTagName('div')->item(0);
+            if (!$container) {
+                $run->addText(strip_tags($html));
+                return;
+            }
+
+            $traverse = function ($node, $style = [], $listContext = []) use (&$traverse, $run) {
+                if ($node->nodeType === XML_TEXT_NODE) {
+                    $text = $node->textContent;
+                    if ($text !== '') {
+                        $run->addText($text, $style);
+                    }
+                    return;
+                }
+
+                if ($node->nodeType !== XML_ELEMENT_NODE) {
+                    return;
+                }
+
+                $tag = strtolower($node->nodeName);
+
+                if ($tag === 'b' || $tag === 'strong') {
+                    $style['bold'] = true;
+                } elseif ($tag === 'i' || $tag === 'em') {
+                    $style['italic'] = true;
+                } elseif ($tag === 'u') {
+                    $style['underline'] = 'single';
+                }
+
+                if ($tag === 'p' || $tag === 'div') {
+                    if ($node->previousSibling) {
+                        $run->addTextBreak();
+                    }
+                }
+                if ($tag === 'br') {
+                    $run->addTextBreak();
+                    return;
+                }
+
+                if ($tag === 'ul' || $tag === 'ol') {
+                    $idx = 1;
+                    $depth = ($listContext['depth'] ?? 0) + 1;
+                    $type = $tag === 'ol'
+                        ? ($node->getAttribute('type') ?: '1')
+                        : 'ul';
+
+                    foreach ($node->childNodes as $child) {
+                        if (strtolower($child->nodeName) === 'li') {
+                            $traverse($child, $style, ['depth' => $depth, 'type' => $type, 'index' => $idx++]);
+                        }
+                    }
+                    return;
+                }
+
+                if ($tag === 'li') {
+                    $depth = $listContext['depth'] ?? 1;
+                    $idx = $listContext['index'] ?? 1;
+                    $lType = $listContext['type'] ?? 'ul';
+
+                    $marker = '• ';
+                    if ($lType !== 'ul') {
+                        if ($lType === 'a') {
+                            $alpha = chr(96 + (($idx - 1) % 26 + 1));
+                            $marker = "{$alpha}. ";
+                        } elseif ($lType === 'A') {
+                            $alpha = chr(64 + (($idx - 1) % 26 + 1));
+                            $marker = "{$alpha}. ";
+                        } else {
+                            $marker = "{$idx}. ";
+                        }
+                    }
+
+                    $run->addTextBreak();
+                    $nbsp = "\xC2\xA0";
+                    $indentStr = str_repeat($nbsp . $nbsp . $nbsp, $depth);
+                    $run->addText($indentStr . $marker, $style);
+
+                    foreach ($node->childNodes as $child) {
+                        $traverse($child, $style, $listContext);
+                    }
+                    return;
+                }
+
+                if ($tag === 'a') {
+                    $href = $node->getAttribute('href');
+                    $inner = $node->textContent;
+                    if ($href) {
+                        $linkStyle = array_merge($style, ['color' => '0000FF', 'underline' => 'single']);
+                        $run->addLink($href, $inner, $linkStyle);
+                        return;
+                    }
+                }
+
+                foreach ($node->childNodes as $child) {
+                    $traverse($child, $style, $listContext);
+                }
+            };
+
+            $traverse($container);
+        };
+
+        // ==== SUSUN DATA UNTUK cloneRow ====
+        $rows = [];
+        $standarBlocks = [];
+        $hasilBlocks = [];
+        $faktorBlocks = [];
+
+        foreach ($details as $i => $d) {
+            $index = $i + 1;
+
+            $stdRun = new TextRun();
+            $stdName = trim(strip_tags($d->indicator->standard->name ?? ''));
+            if ($stdName) {
+                $stdRun->addText($stdName, ['bold' => true]);
+                $stdRun->addTextBreak();
+            }
+            $parseHtmlToTextRun($stdRun, $d->indicator->description ?? '');
+            $standarBlocks[$index] = $stdRun;
+
+            $resRun = new TextRun();
+            $parseHtmlToTextRun($resRun, $d->result ?? '');
+            $hasilBlocks[$index] = $resRun;
+
+            $fakRun = new TextRun();
+            $parseHtmlToTextRun($fakRun, $d->contributing_factors ?? '');
+            $faktorBlocks[$index] = $fakRun;
+
+            $flag = strtolower(optional($d->standardAchievement)->name ?? '');
+            $picRoleNames = DB::table('ami_standard_indicator_pic as p')
+                ->join('roles as r', 'r.id', '=', 'p.role_id')
+                ->where('p.standard_indicator_id', $d->ami_standard_indicator_id)
+                ->where('p.active', 1)
+                ->pluck('r.name')
+                ->unique()
+                ->implode(', ');
+
+            $rows[] = [
+                'no' => (string) $index,
+                'sumber' => $cleanText($picRoleNames, ''),
+                'melampaui' => $flag === 'melampaui' ? '✓' : '',
+                'mencapai' => $flag === 'mencapai' ? '✓' : '',
+                'tidak_mencapai' => $flag === 'tidak mencapai' ? '✓' : '',
+                'menyimpang' => $flag === 'menyimpang' ? '✓' : '',
+            ];
+        }
+
+        $tp->cloneRowAndSetValues('no', $rows);
+
+        foreach ($rows as $idx => $_) {
+            $i = $idx + 1;
+            if (isset($standarBlocks[$i])) {
+                $tp->setComplexBlock("standar#{$i}", $standarBlocks[$i]);
+            }
+            if (isset($hasilBlocks[$i])) {
+                $tp->setComplexBlock("hasil#{$i}", $hasilBlocks[$i]);
+            }
+            if (isset($faktorBlocks[$i])) {
+                $tp->setComplexBlock("faktor#{$i}", $faktorBlocks[$i]);
+            }
+        }
+
+        // ==== SIMPAN DOCX SEMENTARA ====
+        $safe = function (string $name): string {
+            $name = preg_replace('/[\\\\\\/:*?"<>|]+/', '', $name);
+            $name = trim(preg_replace('/\s+/', ' ', $name));
+            return Str::limit($name, 120, '');
+        };
+
+        $safeUnit = $safe($unitName ?: 'Unit');
+        $docxFilename = "F-219_Formulir_Evaluasi_Diri_{$safeUnit}.docx";
+        $pdfFilename = "F-219_Formulir_Evaluasi_Diri_{$safeUnit}.pdf";
+
+        $tmpDir = storage_path('app/tmp');
+        if (!is_dir($tmpDir)) {
+            @mkdir($tmpDir, 0775, true);
+        }
+
+        $docxPath = rtrim($tmpDir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $docxFilename;
+        $pdfPath = rtrim($tmpDir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $pdfFilename;
+
         if (file_exists($docxPath)) {
             @unlink($docxPath);
         }
@@ -1367,9 +1311,127 @@ public function exportPdf(Request $request, SelfEvaluationForm $form): BinaryFil
             @unlink($pdfPath);
         }
 
-        abort(500, 'Gagal mengkonversi ke PDF: ' . $e->getMessage());
+        $tp->saveAs($docxPath);
+
+        // ==== CONVERT DOCX TO PDF USING CONVERTAPI ====
+        try {
+            // Debug logging - environment info
+            logger()->info('PDF Export Debug - Starting conversion', [
+                'docx_path' => $docxPath,
+                'docx_exists' => file_exists($docxPath),
+                'docx_size' => file_exists($docxPath) ? filesize($docxPath) : 'N/A',
+                'pdf_path' => $pdfPath,
+                'tmp_dir' => $tmpDir,
+                'tmp_dir_writable' => is_writable($tmpDir),
+                'php_version' => PHP_VERSION,
+                'curl_enabled' => extension_loaded('curl'),
+                'openssl_enabled' => extension_loaded('openssl'),
+                'convertapi_secret_length' => strlen($convertApiSecret),
+                'convertapi_secret_prefix' => substr($convertApiSecret, 0, 20) . '...',
+            ]);
+
+            ConvertApi::setApiCredentials($convertApiSecret);
+
+            $result = ConvertApi::convert('pdf', [
+                'File' => $docxPath,
+            ], 'docx');
+
+            logger()->info('PDF Export Debug - Conversion successful', [
+                'result_files_count' => count($result->getFiles()),
+            ]);
+
+            // Save the converted PDF
+            $result->saveFiles($tmpDir);
+
+            logger()->info('PDF Export Debug - Files saved', [
+                'tmp_dir_contents' => glob($tmpDir . '/*'),
+            ]);
+
+            // ConvertAPI saves with original name but .pdf extension
+            // Check if file exists, if not try to find it
+            if (!file_exists($pdfPath)) {
+                // Look for any PDF file just created
+                $files = glob($tmpDir . '/*.pdf');
+                logger()->info('PDF Export Debug - Looking for PDF files', [
+                    'expected_path' => $pdfPath,
+                    'found_pdf_files' => $files,
+                ]);
+
+                if (!empty($files)) {
+                    // Get the most recently created PDF
+                    usort($files, function ($a, $b) {
+                        return filemtime($b) - filemtime($a);
+                    });
+                    $convertedPdf = $files[0];
+                    if ($convertedPdf !== $pdfPath) {
+                        rename($convertedPdf, $pdfPath);
+                        logger()->info('PDF Export Debug - Renamed PDF', [
+                            'from' => $convertedPdf,
+                            'to' => $pdfPath,
+                        ]);
+                    }
+                }
+            }
+
+            // Clean up DOCX temp file
+            if (file_exists($docxPath)) {
+                @unlink($docxPath);
+            }
+
+            if (!file_exists($pdfPath)) {
+                logger()->error('PDF Export Debug - Final PDF not found', [
+                    'expected_path' => $pdfPath,
+                    'tmp_dir_contents' => glob($tmpDir . '/*'),
+                ]);
+                abort(500, 'Gagal mengkonversi dokumen ke PDF. File PDF tidak ditemukan setelah konversi.');
+            }
+
+            logger()->info('PDF Export Debug - Success, returning download', [
+                'pdf_size' => filesize($pdfPath),
+            ]);
+
+            return response()->download($pdfPath, $pdfFilename)->deleteFileAfterSend(true);
+
+        } catch (\ConvertApi\Exception\ApiException $e) {
+            // ConvertAPI specific error
+            logger()->error('PDF Export Debug - ConvertAPI Exception', [
+                'message' => $e->getMessage(),
+                'code' => $e->getCode(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            // Clean up temp files on error
+            if (file_exists($docxPath)) {
+                @unlink($docxPath);
+            }
+            if (file_exists($pdfPath)) {
+                @unlink($pdfPath);
+            }
+
+            abort(500, 'ConvertAPI Error: ' . $e->getMessage());
+
+        } catch (\Exception $e) {
+            // General error with detailed logging
+            logger()->error('PDF Export Debug - General Exception', [
+                'exception_class' => get_class($e),
+                'message' => $e->getMessage(),
+                'code' => $e->getCode(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            // Clean up temp files on error
+            if (file_exists($docxPath)) {
+                @unlink($docxPath);
+            }
+            if (file_exists($pdfPath)) {
+                @unlink($pdfPath);
+            }
+
+            abort(500, 'Gagal mengkonversi ke PDF: ' . $e->getMessage());
+        }
     }
-}
 
 
 }

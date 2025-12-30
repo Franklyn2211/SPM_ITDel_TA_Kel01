@@ -41,19 +41,31 @@
 
 					<!-- Login card -->
 					<form method="POST" class="login-form" action="{{route('login.do')}}">
-                        @csrf
-						<div class="p-3">
-							<div class="text-center mb-3">
-								<div class="d-inline-flex align-items-center justify-content-center mb-4 mt-2">
+						@csrf
+						<div class="p-4" style="max-width: 370px; min-width: 320px; background: #fff; border-radius: 18px; box-shadow: 0 4px 32px 0 rgba(44,62,80,.08); margin: 0 auto;">
+							<div class="text-center mb-4">
+								<div class="d-inline-flex align-items-center justify-content-center mb-3 mt-2">
 									<img src="../../../assets/img/logo.png" class="h-48px" alt="">
 								</div>
-								<h5 class="mb-0">Sistem Penjaminan Mutu</h5>
+								<h5 class="mb-0 fw-bold" style="letter-spacing:0.5px;">Sistem Penjaminan Mutu</h5>
 							</div>
 
+							{{-- ALERT ERROR LOGIN (modern style) --}}
+							@if ($errors->any())
+								<div class="alert alert-danger d-flex align-items-center gap-2 mb-3" role="alert" style="border-radius: 8px; font-size: 1rem;">
+									<i class="ph-warning-circle me-2" style="font-size: 1.5rem;"></i>
+									<div>
+										@foreach ($errors->all() as $error)
+											<div>{{ $error }}</div>
+										@endforeach
+									</div>
+								</div>
+							@endif
+
 							<div class="mb-3">
-								<label class="form-label">Username</label>
+								<label class="form-label fw-semibold">Username</label>
 								<div class="form-control-feedback form-control-feedback-start">
-									<input name="username" type="text" class="form-control" placeholder="john@doe.com">
+									<input name="username" type="text" class="form-control py-2" placeholder="john@doe.com" value="{{ old('username') }}" autofocus required>
 									<div class="form-control-feedback-icon">
 										<i class="ph-user-circle text-muted"></i>
 									</div>
@@ -61,28 +73,21 @@
 							</div>
 
 							<div class="mb-3">
-								<label class="form-label">Password</label>
+								<label class="form-label fw-semibold">Password</label>
 								<div class="form-control-feedback form-control-feedback-start">
-									<input name="password" type="password" class="form-control" placeholder="•••••••••••">
+									<input name="password" type="password" class="form-control py-2" placeholder="•••••••••••" required>
 									<div class="form-control-feedback-icon">
 										<i class="ph-lock text-muted"></i>
 									</div>
 								</div>
 							</div>
 
-							<div class="d-flex align-items-center mb-3">
-								<label class="form-check">
-									<input type="checkbox" name="remember" class="form-check-input" checked>
-									<span class="form-check-label">Remember</span>
-								</label>
-
-								<a href="login_password_recover.html" class="ms-auto">Forgot password?</a>
-							</div>
-
 							<div class="mb-3">
-								<button type="submit" class="btn btn-primary w-100">Sign in</button>
+								<button type="submit" class="btn btn-primary w-100 py-2 fw-semibold" style="font-size:1.1rem;">Sign in</button>
 							</div>
-							<span class="form-text text-center text-muted">By continuing, you're confirming that you've read our <a href="#">Terms &amp; Conditions</a> and <a href="#">Cookie Policy</a></span>
+							{{-- <div class="text-center mt-2">
+								<span class="form-text text-muted small">By continuing, you're confirming that you've read our <a href="#">Terms &amp; Conditions</a> and <a href="#">Cookie Policy</a></span>
+							</div> --}}
 						</div>
 					</form>
 					<!-- /login card -->
