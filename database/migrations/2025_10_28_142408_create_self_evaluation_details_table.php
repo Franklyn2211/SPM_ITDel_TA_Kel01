@@ -22,7 +22,6 @@ return new class extends Migration
 
             // Evaluation contents
             $table->text('result')->nullable();                   // hasil
-            $table->text('supporting_evidence')->nullable();      // bukti_pendukung
             $table->text('contributing_factors')->nullable();     // faktor_penghambat_pendukung
 
             // Audit trail

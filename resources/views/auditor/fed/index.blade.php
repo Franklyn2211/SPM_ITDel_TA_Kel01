@@ -1,3 +1,4 @@
+{{-- resources/views/auditor/fed/index.blade.php --}}
 @extends('auditor.layouts.app')
 
 @section('title', 'FED untuk Diaudit')
@@ -25,7 +26,7 @@
 @section('content')
 <div class="card">
   <div class="card-header d-flex align-items-center">
-    <h5 class="mb-0">Daftar FED (Status: Dikirim)</h5>
+    <h5 class="mb-0">Daftar FED</h5>
   </div>
 
   <div class="table-responsive">
@@ -41,14 +42,44 @@
       </thead>
       <tbody>
         @forelse($forms as $i => $form)
+          @php
+            $details = $form->details ?? collect();
+            $total = $details->count();
+            $approved = $details->filter(fn($d) => ($d->status->name ?? '') === 'Disetujui')->count();
+            $rejected = $details->filter(fn($d) => ($d->status->name ?? '') === 'Ditolak')->count();
+            $pending = $details->filter(fn($d) => ($d->status->name ?? '') === 'Dikirim')->count();
+
+            // Status logic
+            if ($total === 0) {
+              $statusText = 'Dikirim';
+              $statusClass = 'bg-info';
+            } elseif ($approved === $total) {
+              $statusText = 'Disetujui';
+              $statusClass = 'bg-success';
+            } elseif ($rejected === $total) {
+              $statusText = 'Ditolak';
+              $statusClass = 'bg-danger';
+            } elseif ($pending === $total) {
+              $statusText = 'Dikirim';
+              $statusClass = 'bg-info';
+            } elseif ($approved > 0 && $approved + $pending === $total) {
+              $statusText = 'Draft';
+              $statusClass = 'bg-secondary';
+            } elseif ($rejected > 0 && $rejected < $total) {
+              $statusText = 'Draft';
+              $statusClass = 'bg-secondary';
+            } else {
+              $statusText = 'Draft';
+              $statusClass = 'bg-secondary';
+            }
+          @endphp
           <tr>
             <td>{{ $i + 1 }}</td>
             <td>
               <div class="fw-semibold">{{ $form->categoryDetail->name ?? '-' }}</div>
-              <div class="text-muted fs-sm">Kode: {{ $form->categoryDetail->code ?? '—' }}</div>
             </td>
             <td>{{ $form->academicConfig->name ?? $form->academicConfig->tahun ?? '—' }}</td>
-            <td><span class="badge bg-info">{{ $form->status->name ?? 'Dikirim' }}</span></td>
+            <td><span class="badge {{ $statusClass }}">{{ $statusText }}</span></td>
             <td class="text-end">
               <a href="{{ route('auditor.fed.show', $form->id) }}" class="btn btn-sm btn-outline-primary">
                 <i class="ph-eye me-1"></i> Lihat FED
@@ -58,7 +89,7 @@
         @empty
           <tr>
             <td colspan="5" class="text-center text-muted py-4">
-              Belum ada FED dengan status <strong>Dikirim</strong>.
+              Belum ada FED yang dikirim.
             </td>
           </tr>
         @endforelse

@@ -12,7 +12,7 @@ class RefCategoryDetail extends Model
     public $incrementing = false;
     protected $keyType = 'string';
 
-    protected $fillable = ['id','name','category_id','active','created_by','updated_by'];
+    protected $fillable = ['id', 'name', 'category_id', 'code', 'active', 'created_by', 'updated_by'];
     protected $casts = ['active' => 'boolean'];
 
     protected static function booted(): void
@@ -31,16 +31,25 @@ class RefCategoryDetail extends Model
         });
     }
 
-    public function category()  { return $this->belongsTo(RefCategory::class, 'category_id', 'id'); }
-    public function createdBy() { return $this->belongsTo(User::class, 'created_by'); }
-    public function updatedBy() { return $this->belongsTo(User::class, 'updated_by'); }
+    public function category()
+    {
+        return $this->belongsTo(RefCategory::class, 'category_id', 'id');
+    }
+    public function createdBy()
+    {
+        return $this->belongsTo(User::class, 'created_by');
+    }
+    public function updatedBy()
+    {
+        return $this->belongsTo(User::class, 'updated_by');
+    }
 
     public static function generateNextId(): string
     {
-        $max = (int) static::where('id','like','CD%')
+        $max = (int) static::where('id', 'like', 'CD%')
             ->selectRaw("MAX(CAST(SUBSTRING(id,3) AS UNSIGNED)) as m")
             ->value('m');
-        $next = 'CD'.str_pad((string)($max+1),3,'0',STR_PAD_LEFT);
-        return static::where('id',$next)->exists() ? static::generateNextId() : $next;
+        $next = 'CD' . str_pad((string) ($max + 1), 3, '0', STR_PAD_LEFT);
+        return static::where('id', $next)->exists() ? static::generateNextId() : $next;
     }
 }

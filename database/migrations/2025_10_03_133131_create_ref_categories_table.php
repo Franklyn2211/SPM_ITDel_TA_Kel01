@@ -25,6 +25,7 @@ return new class extends Migration
             $table->string('id')->primary();
             $table->string('name'); // contoh: D3 TI
             $table->string('category_id');   // FK ke ref_categories
+            $table->string('code')->nullable();
             $table->unsignedBigInteger('created_by')->nullable();
             $table->unsignedBigInteger('updated_by')->nullable();
             $table->boolean('active')->default(true); // 1 = active, 0 = inactive

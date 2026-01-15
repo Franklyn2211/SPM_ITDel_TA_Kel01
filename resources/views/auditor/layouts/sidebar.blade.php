@@ -39,11 +39,20 @@
         </li>
 
         <li class="nav-item">
-          <a href="{{ route('auditor.fed.index') }}" class="nav-link {{ request()->is('/') ? 'active' : '' }}">
+          <a href="{{ route('auditor.fed.index') }}" class="nav-link {{ request()->routeIs('auditor.fed.*') ? 'active' : '' }}">
             <i class="ph-layout"></i>
             <span>FED</span>
           </a>
         </li>
+
+        <li class="nav-item">
+        <a href="{{ route('auditor.temuan.index') }}"
+            class="nav-link {{ request()->routeIs('auditor.temuan.*') ? 'active' : '' }}">
+            <i class="ph-clipboard-text"></i>
+            <span>Form Temuan</span>
+        </a>
+        </li>
+
 
       </ul>
     </div>

@@ -610,7 +610,6 @@ class EvaluasiDiriController extends Controller
         $detail->update([
             'standard_achievement_id' => $data['ketercapaian_standard_id'] ?? null,
             'result' => $data['hasil'] ?? null,
-            'supporting_evidence' => $data['bukti_pendukung'] ?? null,
             'contributing_factors' => $data['faktor_penghambat_pendukung'] ?? null,
             'status_id' => $draftId,
             // updated_by di-handle di model (booted)

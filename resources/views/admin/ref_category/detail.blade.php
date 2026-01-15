@@ -78,6 +78,7 @@
             <th class="text-center" width="50">No</th>
             <th>Kategori</th>
             <th>Detail</th>
+            <th>Kode</th>
             <th class="text-center" width="140">Aksi</th>
           </tr>
         </thead>
@@ -87,6 +88,7 @@
             <td class="text-center">{{ $categoryDetails->firstItem() + $loop->index }}</td>
             <td>{{ $detail->category->name }}</td>
             <td>{{ $detail->name }}</td>
+            <td>{{ $detail->code ?? '-' }}</td>
             <td class="text-center">
               <div class="d-flex justify-content-center gap-2">
                 <button type="button" class="btn btn-warning btn-icon" title="Edit"
@@ -153,6 +155,11 @@
           <input type="text" class="form-control" name="name" value="{{ old('name') }}" required>
           @error('name') <small class="text-danger">{{ $message }}</small> @enderror
         </div>
+        <div class="mb-3">
+          <label class="form-label">Kode</label>
+          <input type="text" class="form-control" name="code" value="{{ old('code') }}">
+          @error('code') <small class="text-danger">{{ $message }}</small> @enderror
+        </div>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-link" data-bs-dismiss="modal">Batal</button>
@@ -188,6 +195,11 @@
           <input type="text" class="form-control" name="name" id="edit_name" value="{{ old('name') }}" required>
           @error('name') <small class="text-danger">{{ $message }}</small> @enderror
         </div>
+        <div class="mb-3">
+          <label class="form-label">Kode</label>
+          <input type="text" class="form-control" name="code" id="edit_code" value="{{ old('code') }}">
+          @error('code') <small class="text-danger">{{ $message }}</small> @enderror
+        </div>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-link" data-bs-dismiss="modal">Batal</button>
@@ -220,10 +232,12 @@
 
       const name   = btn.getAttribute('data-name') || '';
       const catId  = btn.getAttribute('data-category') || '';
+      const code   = btn.getAttribute('data-code') || '';
       const action = btn.getAttribute('data-action') || '';
 
       document.getElementById('edit_name').value = name;
       document.getElementById('edit_category_id').value = catId;
+      document.getElementById('edit_code').value = code;
       document.getElementById('formEditDetail').action = action;
     });
   }
@@ -239,6 +253,8 @@
     if (editName) editName.value = @json(old('name'));
     const editCat = document.getElementById('edit_category_id');
     if (editCat) editCat.value = @json(old('category_id'));
+    const editCode = document.getElementById('edit_code');
+    if (editCode) editCode.value = @json(old('code'));
     new bootstrap.Modal(document.getElementById('modalEditDetail')).show();
   @endif
 

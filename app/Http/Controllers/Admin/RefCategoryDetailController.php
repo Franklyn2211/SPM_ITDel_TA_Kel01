@@ -22,6 +22,7 @@ class RefCategoryDetailController extends Controller
         $request->validate([
             'category_id' => ['required', 'string', 'exists:ref_categories,id'],
             'name' => ['required', 'string', 'max:255', 'unique:ref_category_details,name'],
+            'code' => ['nullable', 'string', 'max:32'],
         ], [
             'name.unique' => 'Detail kategori dengan nama yang sama sudah terdaftar.',
         ]);
@@ -29,6 +30,7 @@ class RefCategoryDetailController extends Controller
         $detail = new RefCategoryDetail([
             'id' => RefCategoryDetail::generateNextId(),
             'name' => $request->get('name'),
+            'code' => $request->get('code'),
         ]);
 
         $category = RefCategory::findOrFail($request->get('category_id'));
@@ -57,7 +59,10 @@ class RefCategoryDetailController extends Controller
             $categoryDetail->category()->associate($category);
         }
 
-        $categoryDetail->update(['name' => $request->get('name')]);
+        $categoryDetail->update([
+            'name' => $request->get('name'),
+            'code' => $request->get('code'),
+        ]);
 
         return redirect()->route('admin.ref_category.detail')->with('success', 'Category Detail updated successfully.');
     }

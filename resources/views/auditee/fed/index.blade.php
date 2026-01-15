@@ -24,47 +24,49 @@
          @endif
          @else
           @if(empty($isMemberForm) || !$isMemberForm)
-            {{-- Ketua / pemilik form: boleh edit header & submit --}}
-            <button type="button" class="btn btn-warning btn-sm rounded-pill"
-                    data-bs-toggle="modal" data-bs-target="#modalEditHeader"
-                    @if(($form->status->name ?? '') === 'Dikirim') disabled @endif>
-            <i class="ph-pencil me-2"></i> Edit Data Auditee
-            </button>
+            @php $isSubmitted = in_array(($form->status->name ?? ''), ['Dikirim', 'Disetujui', 'Ditolak']); @endphp
+            @if(!$isSubmitted)
+              {{-- Ketua / pemilik form: boleh edit header & submit --}}
+              <button type="button" class="btn btn-warning btn-sm rounded-pill"
+                      data-bs-toggle="modal" data-bs-target="#modalEditHeader">
+              <i class="ph-pencil me-2"></i> Edit Data Auditee
+              </button>
 
-            <button type="button"
-              class="btn btn-success btn-sm rounded-pill"
-              data-bs-toggle="modal"
-              data-bs-target="#modalConfirmSubmit"
-              @if(($form->status->name ?? '') === 'Dikirim' || ($progress['total'] ?? 0) === 0 || ($progress['terisi'] ?? 0) < ($progress['total'] ?? 0))
-              disabled
-              @endif>
-              <i class="ph-paper-plane-tilt me-2"></i> Submit
-            </button>
-        {{-- Modal konfirmasi submit FED --}}
-        <div class="modal fade" id="modalConfirmSubmit" tabindex="-1" aria-labelledby="modalConfirmSubmitLabel" aria-hidden="true">
-          <div class="modal-dialog">
-            <form method="POST" action="{{ route('auditee.fed.submit', $form) }}" class="modal-content">
-              @csrf
-              <div class="modal-header">
-                <h5 class="modal-title" id="modalConfirmSubmitLabel">Konfirmasi Submit Form Evaluasi Diri</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
-              </div>
-              <div class="modal-body">
-                <div class="mb-2">
-                  Yakin ingin mengirim Form Evaluasi Diri sekarang?<br>
-                  Setelah dikirim, form tidak dapat diedit lagi.
+              <button type="button"
+                class="btn btn-success btn-sm rounded-pill"
+                data-bs-toggle="modal"
+                data-bs-target="#modalConfirmSubmit"
+                @if(($progress['total'] ?? 0) === 0 || ($progress['terisi'] ?? 0) < ($progress['total'] ?? 0))
+                disabled
+                @endif>
+                <i class="ph-paper-plane-tilt me-2"></i> Submit
+              </button>
+              {{-- Modal konfirmasi submit FED --}}
+              <div class="modal fade" id="modalConfirmSubmit" tabindex="-1" aria-labelledby="modalConfirmSubmitLabel" aria-hidden="true">
+                <div class="modal-dialog">
+                  <form method="POST" action="{{ route('auditee.fed.submit', $form) }}" class="modal-content">
+                    @csrf
+                    <div class="modal-header">
+                      <h5 class="modal-title" id="modalConfirmSubmitLabel">Konfirmasi Submit Form Evaluasi Diri</h5>
+                      <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
+                    </div>
+                    <div class="modal-body">
+                      <div class="mb-2">
+                        Yakin ingin mengirim Form Evaluasi Diri sekarang?<br>
+                        Setelah dikirim, form tidak dapat diedit lagi.
+                      </div>
+                    </div>
+                    <div class="modal-footer">
+                      <button type="button" class="btn btn-light" data-bs-dismiss="modal">Batal</button>
+                      <button type="submit" class="btn btn-success">Kirim</button>
+                    </div>
+                  </form>
                 </div>
               </div>
-              <div class="modal-footer">
-                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Batal</button>
-                <button type="submit" class="btn btn-success">Kirim</button>
-              </div>
-            </form>
-          </div>
-        </div>
-        @endif
+            @endif
+          @endif
 
-        @if($form && ($form->status->name ?? '') === 'Dikirim')
+          @if($form && in_array(($form->status->name ?? ''), ['Dikirim', 'Disetujui', 'Ditolak']))
             {{-- Unduh boleh untuk ketua maupun anggota --}}
             <a href="{{ route('auditee.fed.export', $form) }}" class="btn btn-outline-secondary btn-sm rounded-pill">
             <i class="ph-file-doc me-2"></i> Unduh DOCX
@@ -72,7 +74,7 @@
             <a href="{{ route('auditee.fed.exportPdf', $form) }}" class="btn btn-outline-danger btn-sm rounded-pill">
             <i class="ph-file-pdf me-2"></i> Unduh PDF
             </a>
-        @endif
+          @endif
         @endif
       </div>
     </div>
@@ -221,7 +223,7 @@
           <tbody>
             @forelse($details as $d)
               @php
-                $readOnly = ($form->status->name ?? '') === 'Dikirim';
+                $readOnly = in_array(($form->status->name ?? ''), ['Dikirim', 'Disetujui', 'Ditolak']);
                 $isFilled = !is_null($d->standard_achievement_id) || (isset($d->result) && trim($d->result) !== '');
               @endphp
               <tr id="detail-{{ $d->id }}">
@@ -256,7 +258,6 @@
                     data-update-url="{{ route('auditee.fed.updateDetail', [$form, $d]) }}"
                     data-ketercapaian="{{ $d->standard_achievement_id ?? '' }}"
                     data-hasil="{{ e($d->result ?? '') }}"
-                    data-bukti="{{ e($d->supporting_evidence ?? '') }}"
                     data-faktor="{{ e($d->contributing_factors ?? '') }}"
                     data-pos-template="{{ e($d->indicator->positive_result_template ?? '') }}"
                     data-neg-template="{{ e($d->indicator->negative_result_template ?? '') }}"
@@ -405,7 +406,7 @@
 </div>
 
 {{-- Edit header --}}
-@if($form)
+@if($form && !in_array(($form->status->name ?? ''), ['Dikirim', 'Disetujui', 'Ditolak']))
 <div class="modal fade" id="modalEditHeader" tabindex="-1">
   <div class="modal-dialog modal-lg">
     <form method="POST" action="{{ route('auditee.fed.updateHeader', $form) }}" class="modal-content">

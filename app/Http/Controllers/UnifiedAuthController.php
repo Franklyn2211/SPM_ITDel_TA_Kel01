@@ -140,7 +140,7 @@ class UnifiedAuthController extends Controller
 
         // daftar role yang termasuk auditee
         $auditeeRoles = ['Dekan', 'Ketua Program Studi', 'Ketua PPKHA', 'SPM']; // tambah sesuai kebutuhan
-        $auditorRoles = ['Auditor'];
+        $auditorRoles = ['Ketua Auditor', 'Anggota Auditor', 'Auditor'];
 
         // VERSI SPATIE (paling simpel)
         if (method_exists($user, 'hasAnyRole')) {

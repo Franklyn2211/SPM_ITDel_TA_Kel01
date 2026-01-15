@@ -19,7 +19,6 @@ class SelfEvaluationDetail extends Model
         'standard_achievement_id',
         'status_id',
         'result',
-        'supporting_evidence',
         'contributing_factors',
         'created_by',
         'updated_by',

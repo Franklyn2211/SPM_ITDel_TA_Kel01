@@ -17,12 +17,18 @@
       </a>
     </div>
 
+    @php
+    $allApproved = $form->details->count() > 0
+        && $form->details->every(fn($d) => (($d->status->name ?? '') === 'Disetujui'));
+    @endphp
     <div class="collapse d-lg-block my-lg-auto ms-lg-auto" id="page_header">
-      <div class="d-lg-flex align-items-center gap-2">
-        <a href="{{ route('auditor.dashboard') }}" class="btn btn-light btn-sm rounded-pill">
-          <i class="ph-arrow-left me-2"></i> Kembali ke Dashboard
-        </a>
-      </div>
+        <div class="d-lg-flex align-items-center gap-2">
+            @if($allApproved)
+            <a href="{{ route('auditor.fed.exportPdf', $form->id) }}" class="btn btn-outline-danger btn-sm rounded-pill">
+                <i class="ph-download-simple me-2"></i> Unduh PDF
+            </a>
+            @endif
+        </div>
     </div>
   </div>
 
@@ -42,16 +48,14 @@
         @endif
 
         @php
-          $statusName = $form->status->name ?? 'Draft';
-          $badgeClass = match($statusName) {
-              'Disetujui' => 'bg-success',
-              'Dikirim'   => 'bg-info',
-              'Ditolak'   => 'bg-danger',
-              default     => 'bg-secondary',
+          $formStatus = $form->status->name ?? 'Draft';
+          $formBadge = match($formStatus) {
+            'Disetujui' => 'bg-success',
+            'Ditolak'   => 'bg-danger',
+            'Dikirim'   => 'bg-info',
+            default     => 'bg-secondary',
           };
         @endphp
-
-        <span class="badge {{ $badgeClass }} rounded-pill">{{ $statusName }}</span>
       </div>
     </div>
   </div>
@@ -119,10 +123,10 @@
           $pending  = $form->details->filter(fn($d) => ($d->status->name ?? '') === 'Dikirim')->count();
         @endphp
         <div class="d-flex flex-wrap gap-2 mt-1">
-          <span class="badge bg-secondary">Total: {{ $total }}</span>
-          <span class="badge bg-success">Disetujui: {{ $approved }}</span>
-          <span class="badge bg-danger">Ditolak: {{ $rejected }}</span>
-          <span class="badge bg-info">Menunggu: {{ $pending }}</span>
+          <span class="badge bg-secondary rounded-pill">Total: {{ $total }}</span>
+          <span class="badge bg-success rounded-pill">Disetujui: {{ $approved }}</span>
+          <span class="badge bg-danger rounded-pill">Ditolak: {{ $rejected }}</span>
+          <span class="badge bg-info rounded-pill">Menunggu: {{ $pending }}</span>
         </div>
       </div>
     </div>
@@ -130,7 +134,7 @@
 
   {{-- Tabel indikator --}}
   <div class="card">
-    <div class="card-header d-flex align-items-center justify-content-between">
+    <div class="card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
       <h5 class="mb-0">Daftar Indikator untuk Diaudit</h5>
       <form method="GET" class="d-flex align-items-center" style="gap:8px;">
         <label for="filter_status" class="mb-0 me-2 fw-normal">Filter Status:</label>
@@ -145,195 +149,183 @@
     </div>
 
     <div class="table-responsive">
+
       @php
-        $filteredDetails = $form->details;
-        $filterStatus = request('status');
-        if($filterStatus) {
-          $filteredDetails = $filteredDetails->filter(fn($d) => ($d->status->name ?? 'Draft') === $filterStatus);
-        }
+        // Ambil data detail dari controller (sudah dipaginasi)
+        $filteredDetails = $details ?? collect();
       @endphp
-      <table class="table table-hover align-middle mb-0" id="tableFedAuditor">
+
+      <table class="table table-hover align-top mb-0" id="tableFedAuditor">
         <thead class="table-light">
           <tr>
-            <th class="text-center" style="width: 40px;">No</th>
-            <th style="min-width: 260px;">Standar & Indikator</th>
-            <th style="min-width: 320px;">Isi FED (Auditee)</th>
-            <th style="width: 120px;" class="text-center">Status</th>
-            <th style="width: 320px;">Aksi Auditor</th>
+            <th class="text-center" style="width: 60px;">No</th>
+            <th style="min-width: 320px;">Standar & Indikator</th>
+            <th style="min-width: 560px;">Isi FED (Auditee)</th>
+            <th style="width: 140px;" class="text-center">Status</th>
+            <th style="width: 280px;">Aksi Auditor</th>
           </tr>
         </thead>
+
         <tbody>
           @forelse($filteredDetails as $detail)
             @php
               $statusNameDetail = $detail->status->name ?? 'Draft';
-              $badgeClassDetail = match($statusNameDetail) {
-                  'Disetujui' => 'bg-success',
-                  'Ditolak'   => 'bg-danger',
-                  'Dikirim'   => 'bg-info',
-                  default     => 'bg-secondary',
+              $badgeDetail = match($statusNameDetail) {
+                'Disetujui' => 'bg-success',
+                'Ditolak'   => 'bg-danger',
+                'Dikirim'   => 'bg-info',
+                default     => 'bg-secondary',
               };
 
               $stdName = optional($detail->indicator->standard)->name ?? 'Standar';
+
               $rawDesc = $detail->indicator->description ?? '';
               $plainDesc = trim(preg_replace('/\s+/', ' ', strip_tags($rawDesc)));
-              $shortDesc = \Illuminate\Support\Str::limit($plainDesc, 150);
+              $shortDesc = \Illuminate\Support\Str::limit($plainDesc, 160);
+
+              $achName = $detail->standardAchievement->name ?? 'Belum diisi';
+
+              $plainResult = trim(preg_replace('/\s+/', ' ', strip_tags($detail->result ?? '')));
+              $plainResult = $plainResult ?: 'Belum diisi.';
+              $snippet = \Illuminate\Support\Str::limit($plainResult, 240);
+
+              $collapseId = "fedDetail_{$detail->id}";
+
+              // Checklist preview for modal (read-only display)
+              $checklistHtml = '';
+              if ($detail->auditChecklists && $detail->auditChecklists->count() > 0) {
+                $checklistHtml .= '<ol class="mb-0 ps-3">';
+                foreach ($detail->auditChecklists as $cl) {
+                  $item = e($cl->item);
+                  $note = $cl->note ? '<div class="text-muted fs-sm">'.e($cl->note).'</div>' : '';
+                  $checklistHtml .= "<li class='mb-2'><div class='fw-semibold'>{$item}</div>{$note}</li>";
+                }
+                $checklistHtml .= '</ol>';
+              } else {
+                $checklistHtml = '<div class="text-muted">Belum ada daftar tilik.</div>';
+              }
+              $checklistB64 = base64_encode($checklistHtml);
             @endphp
 
             <tr id="detail-{{ $detail->id }}">
-              <td class="text-center align-top">{{ $loop->iteration }}</td>
+              <td class="text-center">{{ $loop->iteration }}</td>
 
-              {{-- Kolom standar & indikator (nama standar + ringkasan indikator) --}}
-              <td class="align-top td-standar">
+              {{-- Standar & Indikator --}}
+              <td>
                 <div class="fw-semibold mb-1">{{ $stdName }}</div>
-                <div class="text-muted fs-sm">
-                  {!! e($shortDesc) !!}
-                </div>
-                @if(strlen($plainDesc) > strlen($shortDesc))
-                  <button type="button"
-                          class="btn btn-link btn-xs p-0 mt-1"
-                          data-bs-toggle="modal"
-                          data-bs-target="#modalDesc"
-                          data-title="{{ $stdName }}"
-                          data-desc-html="{{ base64_encode($rawDesc) }}">
-                    Lihat deskripsi lengkap
-                  </button>
-                @endif
+                <div class="text-muted fs-sm">{{ $shortDesc }}</div>
+
+                <button type="button"
+                        class="btn btn-link p-0 fs-sm mt-1"
+                        data-bs-toggle="modal"
+                        data-bs-target="#modalDesc"
+                        data-title="{{ $stdName }}"
+                        data-desc-html="{{ base64_encode($rawDesc) }}">
+                  Lihat indikator lengkap
+                </button>
               </td>
 
-              {{-- Kolom isi FED auditee --}}
-              <td class="align-top">
-                <div class="fw-semibold fs-sm mb-1">Ketercapaian Standar</div>
-                <div class="mb-2">
-                  @if($detail->standardAchievement)
-                    <span class="badge bg-primary">{{ $detail->standardAchievement->name }}</span>
-                  @else
-                    <span class="text-muted">Belum diisi.</span>
-                  @endif
+              {{-- Isi FED (Auditee) --}}
+              <td>
+                <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+                  <span class="badge bg-primary rounded-pill">
+                    Ketercapaian: {{ $achName }}
+                  </span>
+
+                  <span class="text-muted fs-sm">
+                    Checklist: <strong>{{ $detail->auditChecklists->count() }}</strong>
+                  </span>
                 </div>
 
-                <div class="fw-semibold fs-sm mb-1">Hasil Pelaksanaan</div>
-                <div class="border rounded p-2 bg-light mb-2 fs-sm" style="max-height: 160px; overflow:auto;">
-                  @if($detail->result)
-                    {!! $detail->result !!}
-                  @else
-                    <span class="text-muted">Belum diisi.</span>
-                  @endif
+                <div class="text-muted fs-sm mb-1">Hasil (ringkas)</div>
+                <div class="fs-sm">{{ $snippet }}</div>
+
+                <button class="btn btn-link p-0 fs-sm mt-1"
+                        type="button"
+                        data-bs-toggle="collapse"
+                        data-bs-target="#{{ $collapseId }}"
+                        aria-expanded="false"
+                        aria-controls="{{ $collapseId }}">
+                  Lihat detail hasil
+                </button>
+
+                <div class="collapse mt-2" id="{{ $collapseId }}">
+                  <div class="border rounded p-3 bg-light">
+                    <div class="text-muted fs-sm mb-1">Hasil (lengkap)</div>
+                    <div class="fs-sm">
+                      {!! $detail->result ?: '<span class="text-muted">Belum diisi.</span>' !!}
+                    </div>
+
+                    <hr class="my-3">
+
+                    <div class="text-muted fs-sm mb-1">Faktor Penghambat / Pendukung</div>
+                    <div class="fs-sm">
+                      @if($detail->contributing_factors)
+                        {!! nl2br(e($detail->contributing_factors)) !!}
+                      @else
+                        <span class="text-muted">Belum diisi.</span>
+                      @endif
+                    </div>
+                  </div>
                 </div>
-
-                @if($detail->supporting_evidence)
-                  <div class="fw-semibold fs-sm mb-1">Bukti / Dokumen Pendukung</div>
-                  <div class="border rounded p-2 bg-light mb-2 fs-sm" style="max-height: 140px; overflow:auto;">
-                    {!! nl2br(e($detail->supporting_evidence)) !!}
-                  </div>
-                @endif
-
-                @if($detail->contributing_factors)
-                  <div class="fw-semibold fs-sm mb-1">Faktor Penghambat / Pendukung</div>
-                  <div class="border rounded p-2 bg-light fs-sm" style="max-height: 140px; overflow:auto;">
-                    {!! nl2br(e($detail->contributing_factors)) !!}
-                  </div>
-                @endif
               </td>
 
               {{-- Status --}}
-              <td class="text-center align-top">
-                <span class="badge {{ $badgeClassDetail }}">{{ $statusNameDetail }}</span>
+              <td class="text-center">
+                <span class="badge {{ $badgeDetail }} rounded-pill">{{ $statusNameDetail }}</span>
               </td>
 
               {{-- Aksi --}}
-              <td class="align-top">
-                {{-- ========== STATUS: DIKIRIM -> boleh Terima/Tolak ========== --}}
+              <td>
                 @if($statusNameDetail === 'Dikirim')
-                  <div class="d-flex flex-wrap gap-1 mb-2">
-                    <form method="POST"
-                          action="{{ route('auditor.fed.details.approve', [$form->id, $detail->id]) }}">
+                  <div class="d-flex flex-wrap gap-2 mb-2">
+                    <form method="POST" action="{{ route('auditor.fed.details.approve', [$form->id, $detail->id]) }}">
                       @csrf
-                      <button type="submit" class="btn btn-sm btn-success">
-                        Terima
-                      </button>
+                      <button type="submit" class="btn btn-sm btn-success">Terima</button>
                     </form>
 
-                    <form method="POST"
-                          action="{{ route('auditor.fed.details.reject', [$form->id, $detail->id]) }}">
+                    <form method="POST" action="{{ route('auditor.fed.details.reject', [$form->id, $detail->id]) }}">
                       @csrf
-                      <button type="submit" class="btn btn-sm btn-danger">
-                        Tolak
-                      </button>
+                      <button type="submit" class="btn btn-sm btn-danger">Tolak</button>
                     </form>
                   </div>
-                  <div class="small text-muted">
-                    Terima jika isi sudah sesuai. Tolak jika perlu koreksi dan tindak lanjut.
-                  </div>
+                  <div class="text-muted fs-sm">Terima jika sudah sesuai. Tolak jika perlu tindak lanjut.</div>
 
-                {{-- ========== STATUS: DITOLAK -> checklist + popup edit FED ========== --}}
                 @elseif($statusNameDetail === 'Ditolak')
-                  <div class="mb-2">
-                    <span class="text-danger fw-semibold fs-sm">Indikator ditolak, perlu tindak lanjut.</span>
+                  <div class="d-flex flex-wrap gap-2 mb-2">
+                    {{-- Checklist modal (ONCE ONLY) --}}
+                    <button type="button"
+                      class="btn btn-sm btn-outline-primary"
+                      data-bs-toggle="modal"
+                      data-bs-target="#modalChecklist"
+                      data-has-checklist="{{ $detail->auditChecklists->count() > 0 ? 1 : 0 }}"
+                      data-existing-b64="{{ $checklistB64 }}"
+                      data-action="{{ route('auditor.checklists.bulkStoreOnce', $detail->id) }}">
+                      Daftar Tilik
+                    </button>
+
+                    {{-- Edit FED auditor --}}
+                    <button type="button"
+                      class="btn btn-sm btn-primary"
+                      data-bs-toggle="modal"
+                      data-bs-target="#modalEditFedAuditor"
+                      data-update-url="{{ route('auditor.fed.details.update', [$form->id, $detail->id]) }}"
+                      data-ketercapaian="{{ $detail->standard_achievement_id ?? '' }}"
+                      data-hasil="{{ e($detail->result ?? '') }}"
+                      data-faktor="{{ e($detail->contributing_factors ?? '') }}"
+                      data-pos-template="{{ e($detail->indicator->positive_result_template ?? '') }}"
+                      data-neg-template="{{ e($detail->indicator->negative_result_template ?? '') }}">
+                      Isi/Edit FED
+                    </button>
                   </div>
 
-                  {{-- Daftar Tilik --}}
-                  <div class="border rounded p-2 mb-2 bg-light">
-                    <div class="fw-semibold fs-sm mb-1">Daftar Tilik Auditor</div>
-                    <ul class="mb-2 fs-sm">
-                      @forelse($detail->auditChecklists as $cl)
-                        <li>
-                          <strong>{{ $cl->item }}</strong>
-                          @if($cl->note)
-                            <br><span class="text-muted">{{ $cl->note }}</span>
-                          @endif
-                          <form method="POST"
-                                action="{{ route('auditor.checklists.destroy', $cl->id) }}"
-                                class="d-inline">
-                            @csrf
-                            @method('DELETE')
-                            <button type="submit"
-                                    class="btn btn-xs btn-outline-danger ms-1">Hapus</button>
-                          </form>
-                        </li>
-                      @empty
-                        <li class="text-muted">Belum ada daftar tilik.</li>
-                      @endforelse
-                    </ul>
-
-                    <form method="POST" action="{{ route('auditor.checklists.store', $detail->id) }}">
-                      @csrf
-                      <input type="text"
-                             name="item"
-                             class="form-control form-control-sm mb-1"
-                             placeholder="Item pertanyaan / hal yang dicek"
-                             required>
-                      <textarea name="note"
-                                rows="2"
-                                class="form-control form-control-sm mb-1"
-                                placeholder="Catatan (opsional)"></textarea>
-                      <button class="btn btn-xs btn-primary">Tambah Daftar Tilik</button>
-                    </form>
+                  <div class="text-muted fs-sm">
+                    Daftar tilik dibuat <strong>sekali</strong> dan tidak bisa diubah.
+                    Setelah simpan hasil final, indikator otomatis <strong>Disetujui</strong>.
                   </div>
 
-                  {{-- Tombol popup edit FED ala auditee --}}
-                  <button type="button"
-                          class="btn btn-sm btn-outline-primary"
-                          data-bs-toggle="modal"
-                          data-bs-target="#modalEditFedAuditor"
-                          data-update-url="{{ route('auditor.fed.details.update', [$form->id, $detail->id]) }}"
-                          data-ketercapaian="{{ $detail->standard_achievement_id ?? '' }}"
-                          data-hasil="{{ e($detail->result ?? '') }}"
-                          data-bukti="{{ e($detail->supporting_evidence ?? '') }}"
-                          data-faktor="{{ e($detail->contributing_factors ?? '') }}"
-                          data-pos-template="{{ e($detail->indicator->positive_result_template ?? '') }}"
-                          data-neg-template="{{ e($detail->indicator->negative_result_template ?? '') }}">
-                    Isi/Edit FED (hasil akhir)
-                  </button>
-
-                  <div class="mt-1 small text-muted">
-                    Setelah disimpan, indikator akan otomatis <strong>Disetujui</strong>.
-                  </div>
-
-                {{-- ========== STATUS LAIN (Disetujui / Draft / apapun) -> read only ========== --}}
                 @else
-                  <div class="small text-muted">
-                    Tidak ada aksi. Indikator sudah {{ strtolower($statusNameDetail) }}.
-                  </div>
+                  <div class="text-muted fs-sm">Tidak ada aksi.</div>
                 @endif
               </td>
             </tr>
@@ -346,20 +338,27 @@
           @endforelse
         </tbody>
       </table>
+
+      {{-- Pagination --}}
+      @if(method_exists($filteredDetails, 'links'))
+        <div class="mt-3">
+          {{ $filteredDetails->withQueryString()->links() }}
+        </div>
+      @endif
     </div>
   </div>
 </div>
 
-{{-- ================== MODAL: DESKRIPSI LENGKAP INDIKATOR ================== --}}
+{{-- ================== MODAL: DESKRIPSI INDIKATOR (HTML ASLI) ================== --}}
 <div class="modal fade" id="modalDesc" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-lg">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title" id="modalDesc_title">Deskripsi Indikator</h5>
+        <h5 class="modal-title" id="modalDesc_title">Indikator</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
       </div>
       <div class="modal-body">
-        <div id="modalDesc_body" class="mb-0" style="white-space: normal;"></div>
+        <div id="modalDesc_body"></div>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-light" data-bs-dismiss="modal">Tutup</button>
@@ -368,7 +367,50 @@
   </div>
 </div>
 
-{{-- ================== MODAL: ISI/EDIT FED AUDITOR ================== --}}
+{{-- ================== MODAL: CHECKLIST (ONCE, READ-ONLY IF EXISTS) ================== --}}
+<div class="modal fade" id="modalChecklist" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <form method="POST" id="formChecklist" class="modal-content">
+      @csrf
+
+      <div class="modal-header">
+        <h5 class="modal-title">Daftar Tilik Auditor</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
+      </div>
+
+      <div class="modal-body">
+        <div class="alert alert-info py-2 mb-3" id="checklistHint">
+          Buat daftar tilik sekaligus. Setelah disimpan, tidak bisa diubah.
+        </div>
+
+        <div id="checklistExistingWrap" class="mb-3 d-none">
+          <div class="fw-semibold mb-2">Checklist yang sudah tersimpan</div>
+          <div class="border rounded p-2 bg-light" style="max-height:240px; overflow:auto;">
+            <div id="checklistExistingBody"></div>
+          </div>
+        </div>
+
+        <div id="checklistInputWrap">
+          <div class="fw-semibold mb-2">Input checklist</div>
+          <div id="checklistRows" class="d-flex flex-column gap-2"></div>
+
+          <button type="button" class="btn btn-sm btn-outline-primary mt-2" id="btnAddChecklistRow">
+            <i class="ph-plus me-1"></i> Tambah Item
+          </button>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Tutup</button>
+        <button type="submit" class="btn btn-primary" id="btnSaveChecklist">
+          Simpan (Sekali Saja)
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{{-- ================== MODAL: EDIT FED AUDITOR (TANPA BUKTI) ================== --}}
 <div class="modal fade" id="modalEditFedAuditor" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-xl">
     <form method="POST" id="formEditFedAuditor" class="modal-content">
@@ -381,7 +423,6 @@
       </div>
 
       <div class="modal-body">
-        {{-- Ketercapaian Standar --}}
         <div class="mb-4">
           <label class="form-label fw-semibold">Ketercapaian Standar</label>
           <div class="d-flex flex-column gap-2">
@@ -394,7 +435,6 @@
                 <input type="radio"
                        name="ketercapaian_standard_id"
                        value="{{ $op->id }}"
-                       id="ketercapaian_auditor_{{ $op->id }}"
                        data-template-type="{{ $templateType }}">
                 <span>{{ $op->name }}</span>
               </label>
@@ -402,26 +442,18 @@
           </div>
         </div>
 
-        {{-- Hasil Pelaksanaan --}}
         <div class="mb-4">
-          <label class="form-label fw-semibold">Hasil Pelaksanaan</label>
+          <label class="form-label fw-semibold">Hasil Pelaksanaan (bukti ditulis di sini)</label>
           <textarea name="hasil" id="modal_auditor_hasil" class="form-control summernote-fed"></textarea>
         </div>
 
-        {{-- Bukti / Dokumen Pendukung --}}
-        <div class="mb-4">
-          <label class="form-label fw-semibold">Bukti / Dokumen Pendukung</label>
-          <textarea name="bukti_pendukung" id="modal_auditor_bukti" class="form-control summernote-fed"></textarea>
-        </div>
-
-        {{-- Faktor Penghambat / Pendukung --}}
         <div class="mb-3">
           <label class="form-label fw-semibold">Faktor Penghambat / Pendukung</label>
           <textarea name="faktor_penghambat_pendukung" id="modal_auditor_faktor" class="form-control summernote-fed"></textarea>
         </div>
 
         <p class="text-muted fs-sm mb-0">
-          Setelah disimpan, status indikator akan berubah menjadi <strong>Disetujui</strong> dan tidak dapat diubah lagi dari halaman ini.
+          Setelah disimpan, status indikator berubah menjadi <strong>Disetujui</strong>.
         </p>
       </div>
 
@@ -441,19 +473,34 @@
 <style>
   .note-editor.note-frame { border: 1px solid #ddd; }
   .note-editing-area { min-height: 150px; }
+  .modal-xl { max-width: 1140px; }
   #modalEditFedAuditor .modal-body { max-height: calc(100vh - 200px); overflow-y: auto; }
-  .td-standar { white-space: normal; word-wrap: break-word; }
-  .td-standar ol, .td-standar ul { margin-bottom: 0.5rem; padding-left: 1.3rem; }
-  .td-standar p { margin-bottom: .4rem; }
-  .td-standar p:last-child { margin-bottom: 0; }
+  .table td { vertical-align: top; }
+  .note-modal { z-index: 1065 !important; }
+  .note-popover { z-index: 1065 !important; }
+  .note-toolbar { z-index: 1065; }
+  .note-modal-backdrop { z-index: 1064 !important; }
+  .note-modal, .note-modal * { pointer-events: auto; }
 </style>
 @endpush
 
 @push('scripts')
 <script src="https://cdn.jsdelivr.net/npm/summernote@0.8.20/dist/summernote-lite.min.js"></script>
 <script>
-  let auditorSummernoteInit = false;
+  // Custom AlphaListButton for a, b, c list
+  const AlphaListButton = function (context) {
+    const ui = $.summernote.ui;
+    const button = ui.button({
+      contents: '<i class="note-icon-unorderedlist"></i> a.',
+      tooltip: 'Daftar alfabet (a, b, c)',
+      click: function () {
+        context.invoke('editor.pasteHTML', '<ol type="a"><li></li></ol><p></p>');
+      }
+    });
+    return button.render();
+  };
 
+  let auditorSummernoteInit = false;
   function initAuditorSummernote() {
     if (auditorSummernoteInit) return;
     $('.summernote-fed').summernote({
@@ -468,8 +515,10 @@
         ['height', ['height']],
         ['table', ['table']],
         ['insert', ['link', 'picture', 'video']],
+        ['custom', ['alphaList']],
         ['view', ['fullscreen', 'codeview', 'help']]
       ],
+      buttons: { alphaList: AlphaListButton },
       placeholder: 'Tuliskan di sini...',
       tabsize: 2,
       dialogsInBody: true
@@ -477,15 +526,45 @@
     auditorSummernoteInit = true;
   }
 
-  function stripHtmlToPlainText(html) {
+  function decodeHtmlEntities(str) {
     const txt = document.createElement('textarea');
-    txt.innerHTML = html || '';
-    const decoded = txt.value;
-    const div = document.createElement('div');
-    div.innerHTML = decoded;
-    return (div.textContent || div.innerText || '').trim();
+    txt.innerHTML = str || '';
+    return txt.value;
   }
 
+  // Auto-close collapse detail saat buka detail lain
+  document.addEventListener('show.bs.collapse', function (e) {
+    const target = e.target;
+    if (!target.id || !target.id.startsWith('fedDetail_')) return;
+    document.querySelectorAll('.collapse[id^="fedDetail_"]').forEach(el => {
+      if (el !== target) {
+        const bs = bootstrap.Collapse.getInstance(el);
+        if (bs) bs.hide();
+      }
+    });
+  });
+
+  // ===== Modal indikator (HTML asli: bullet/numbering muncul) =====
+  (function () {
+    const modal = document.getElementById('modalDesc');
+    if (!modal) return;
+
+    modal.addEventListener('show.bs.modal', function (ev) {
+      const btn = ev.relatedTarget;
+      const title = btn?.getAttribute('data-title') || 'Indikator';
+      const b64   = btn?.getAttribute('data-desc-html') || '';
+      const titleEl = document.getElementById('modalDesc_title');
+      const bodyEl  = document.getElementById('modalDesc_body');
+
+      if (titleEl) titleEl.textContent = title;
+      if (!bodyEl) return;
+
+      try { bodyEl.innerHTML = b64 ? atob(b64) : ''; }
+      catch (e) { bodyEl.textContent = ''; }
+    });
+  })();
+
+  // ===== Modal Edit FED Auditor =====
   (function () {
     const modalEdit = document.getElementById('modalEditFedAuditor');
     const formEdit  = document.getElementById('formEditFedAuditor');
@@ -500,7 +579,6 @@
       const updateUrl    = btn.getAttribute('data-update-url') || '';
       const ketercapaian = btn.getAttribute('data-ketercapaian') || '';
       const hasil        = btn.getAttribute('data-hasil') || '';
-      const bukti        = btn.getAttribute('data-bukti') || '';
       const faktor       = btn.getAttribute('data-faktor') || '';
       const posTemplate  = btn.getAttribute('data-pos-template') || '';
       const negTemplate  = btn.getAttribute('data-neg-template') || '';
@@ -510,30 +588,16 @@
       modalEdit.dataset.posTemplate = posTemplate;
       modalEdit.dataset.negTemplate = negTemplate;
 
-      // radio
       const radios = modalEdit.querySelectorAll('input[name="ketercapaian_standard_id"]');
       radios.forEach(r => r.checked = false);
       if (ketercapaian) {
-        const r = modalEdit.querySelector(
-          `input[name="ketercapaian_standard_id"][value="${ketercapaian}"]`
-        );
+        const r = modalEdit.querySelector(`input[name="ketercapaian_standard_id"][value="${ketercapaian}"]`);
         if (r) r.checked = true;
       }
 
-      // isi summernote
       setTimeout(function () {
-        $('#modal_auditor_hasil').summernote(
-          'code',
-          $('<p/>').text(stripHtmlToPlainText(hasil)).html()
-        );
-        $('#modal_auditor_bukti').summernote(
-          'code',
-          $('<p/>').text(stripHtmlToPlainText(bukti)).html()
-        );
-        $('#modal_auditor_faktor').summernote(
-          'code',
-          $('<p/>').text(stripHtmlToPlainText(faktor)).html()
-        );
+        $('#modal_auditor_hasil').summernote('code', decodeHtmlEntities(hasil));
+        $('#modal_auditor_faktor').summernote('code', decodeHtmlEntities(faktor));
       }, 80);
     });
 
@@ -541,12 +605,10 @@
       formEdit.reset();
       if (auditorSummernoteInit) {
         $('#modal_auditor_hasil').summernote('code', '');
-        $('#modal_auditor_bukti').summernote('code', '');
         $('#modal_auditor_faktor').summernote('code', '');
       }
     });
 
-    // auto template ketika radio ketercapaian diganti
     modalEdit.addEventListener('change', function (ev) {
       const target = ev.target;
       if (target.name !== 'ketercapaian_standard_id') return;
@@ -557,35 +619,116 @@
       else if (type === 'neg') tpl = modalEdit.dataset.negTemplate || '';
 
       if (tpl) {
-        $('#modal_auditor_hasil').summernote(
-          'code',
-          $('<p/>').text(stripHtmlToPlainText(tpl)).html()
-        );
+        $('#modal_auditor_hasil').summernote('code', tpl);
       }
     });
   })();
 
-  // Modal deskripsi lengkap indikator
+  // ===== Modal Checklist (ONCE, read-only jika sudah ada) =====
   (function () {
-    const modal = document.getElementById('modalDesc');
-    if (!modal) return;
+    const modal = document.getElementById('modalChecklist');
+    const form  = document.getElementById('formChecklist');
+    const rows  = document.getElementById('checklistRows');
+    const addBtn= document.getElementById('btnAddChecklistRow');
+    const hint  = document.getElementById('checklistHint');
+    const saveBtn = document.getElementById('btnSaveChecklist');
 
-    modal.addEventListener('show.bs.modal', function (ev) {
+    const existingWrap = document.getElementById('checklistExistingWrap');
+    const existingBody = document.getElementById('checklistExistingBody');
+    const inputWrap = document.getElementById('checklistInputWrap');
+
+    let rowIndex = 0; // unik, tidak reindex
+
+    function rowTemplate(idx) {
+      return `
+        <div class="border rounded p-2" data-index="${idx}">
+          <div class="d-flex gap-2 align-items-start">
+            <div class="flex-fill">
+              <input class="form-control form-control-sm"
+                name="items[${idx}][item]"
+                placeholder="Item yang dicek (wajib)" required>
+              <textarea class="form-control form-control-sm mt-2"
+                name="items[${idx}][note]" rows="2"
+                placeholder="Catatan (opsional)"></textarea>
+            </div>
+            <button type="button" class="btn btn-sm btn-outline-danger btnRemoveRow">
+              Hapus
+            </button>
+          </div>
+        </div>
+      `;
+    }
+
+    function addRow() {
+      const idx = rowIndex++;
+      const wrapper = document.createElement('div');
+      wrapper.innerHTML = rowTemplate(idx);
+      const node = wrapper.firstElementChild;
+      rows.appendChild(node);
+      node.querySelector('.btnRemoveRow').addEventListener('click', () => node.remove());
+    }
+
+    function resetRows() {
+      rows.innerHTML = '';
+      rowIndex = 0;
+      addRow();
+    }
+
+    modal?.addEventListener('show.bs.modal', function (ev) {
       const btn = ev.relatedTarget;
-      const title = btn?.getAttribute('data-title') || 'Deskripsi Indikator';
-      const b64   = btn?.getAttribute('data-desc-html') || '';
-      const titleEl = document.getElementById('modalDesc_title');
-      const bodyEl  = document.getElementById('modalDesc_body');
+      if (!btn) return;
 
-      if (titleEl) titleEl.textContent = title;
-      if (!bodyEl) return;
+      const hasChecklist = btn.getAttribute('data-has-checklist') === '1';
+      const existingB64  = btn.getAttribute('data-existing-b64') || '';
+      const action        = btn.getAttribute('data-action') || '';
 
-      try {
-        bodyEl.innerHTML = b64 ? atob(b64) : '';
-      } catch (e) {
-        bodyEl.textContent = '';
+      form.action = action;
+
+      if (hasChecklist) {
+        hint.classList.remove('alert-info');
+        hint.classList.add('alert-warning');
+        hint.textContent = 'Daftar tilik sudah dibuat. Tidak bisa diubah.';
+
+        try { existingBody.innerHTML = existingB64 ? atob(existingB64) : ''; }
+        catch (e) { existingBody.innerHTML = ''; }
+
+        existingWrap.classList.remove('d-none');
+        inputWrap.classList.add('d-none');
+
+        addBtn.disabled = true;
+        saveBtn.disabled = true;
+
+        rows.innerHTML = '';
+      } else {
+        hint.classList.remove('alert-warning');
+        hint.classList.add('alert-info');
+        hint.textContent = 'Buat daftar tilik sekaligus. Setelah disimpan, tidak bisa diubah.';
+
+        existingBody.innerHTML = '';
+        existingWrap.classList.add('d-none');
+        inputWrap.classList.remove('d-none');
+
+        addBtn.disabled = false;
+        saveBtn.disabled = false;
+
+        resetRows();
       }
     });
+
+    modal?.addEventListener('hidden.bs.modal', function () {
+      form.action = '';
+      existingBody.innerHTML = '';
+      existingWrap.classList.add('d-none');
+      inputWrap.classList.remove('d-none');
+      addBtn.disabled = false;
+      saveBtn.disabled = false;
+      resetRows();
+    });
+
+    addBtn?.addEventListener('click', addRow);
+
+    // default 1 row
+    resetRows();
   })();
 </script>
 @endpush

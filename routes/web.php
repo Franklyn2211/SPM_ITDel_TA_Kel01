@@ -13,6 +13,9 @@ use App\Http\Controllers\Admin\IndicatorPicController;
 use App\Http\Controllers\Auditee\DashboardController;
 use App\Http\Controllers\Auditee\EvaluasiDiriController;
 use App\Http\Controllers\Auditor\AuditChecklistController;
+use App\Http\Controllers\Auditor\AuditFindingDetailController;
+use App\Http\Controllers\Auditor\AuditFindingExportController;
+use App\Http\Controllers\Auditor\AuditFindingHeaderController;
 use App\Http\Controllers\Auditor\FedReviewController;
 use App\Http\Controllers\UnifiedAuthController;
 use Illuminate\Support\Facades\Route;
@@ -43,7 +46,7 @@ Route::prefix('auditee')->name('auditee.')->middleware(['auth', 'role:Ketua Prog
     Route::get('/fed/{form}/export-pdf', [EvaluasiDiriController::class, 'exportPdf'])->name('fed.exportPdf');
 });
 
-Route::prefix('auditor')->name('auditor.')->middleware(['auth', 'role:Auditor'])->group(function () {
+Route::prefix('auditor')->name('auditor.')->middleware(['auth', 'role:Ketua Auditor|Anggota Auditor'])->group(function () {
     Route::get('/dashboard', [\App\Http\Controllers\Auditor\DashboardController::class, 'index'])->name('dashboard');
 
     Route::get('/fed/rekap', [\App\Http\Controllers\Auditor\FedRecapController::class, 'index'])->name('fed.rekap.index');
@@ -62,7 +65,7 @@ Route::prefix('auditor')->name('auditor.')->middleware(['auth', 'role:Auditor'])
             ->name('fed.details.reject');
 
         // auditor modif isi FED setelah Ditolak (dan auto setujui)
-        Route::put('/fed/{form}/details/{detail}', [FedReviewController::class, 'updateDetailAfterEdit'])
+        Route::put('/fed/{form}/details/{detail}', [FedReviewController::class, 'updateDetail'])
             ->name('fed.details.update');
 
         // checklist
@@ -70,6 +73,21 @@ Route::prefix('auditor')->name('auditor.')->middleware(['auth', 'role:Auditor'])
             ->name('checklists.store');
         Route::delete('/checklists/{checklist}', [AuditChecklistController::class, 'destroy'])
             ->name('checklists.destroy');
+        Route::post('/auditor/fed/details/{detailId}/checklists/bulk-once', [AuditChecklistController::class, 'bulkStoreOnce'])
+            ->name('checklists.bulkStoreOnce');
+        Route::get('/auditor/fed/{form}/export-pdf', [FedReviewController::class, 'exportPdf'])
+            ->name('fed.exportPdf');
+
+        Route::get('/finding', [AuditFindingHeaderController::class, 'index'])->name('temuan.index'); // page 1
+        Route::get('/finding/{fed}', [AuditFindingHeaderController::class, 'show'])->name('temuan.show'); // page 2
+
+        Route::put('/form/{form}/header', [AuditFindingHeaderController::class, 'updateHeader'])->name('temuan.header.update');
+        Route::post('/form/{form}/finalize', [AuditFindingHeaderController::class, 'finalize'])->name('temuan.finalize');
+
+        Route::put('/form/{form}/row/{finding}', [AuditFindingDetailController::class, 'updateRow'])->name('temuan.row.update');
+
+        Route::get('auditor/temuan/{form}/export-pdf', [AuditFindingExportController::class, 'exportPdf'])
+            ->name('temuan.exportPdf');
 });
 
 // ==== AREA ADMIN ====
