@@ -59,6 +59,13 @@
             </a>
         </li>
 
+          <li class="nav-item">
+            <a href="{{ route('admin.audit_checklists.index') }}" class="nav-link">
+              <i class="ph-list-checks"></i>
+              <span>Data Daftar Tilik</span>
+            </a>
+          </li>
+
         {{-- Components (contoh ringkas) --}}
         <li class="nav-item-header">
           <div class="text-uppercase fs-sm lh-sm opacity-50 sidebar-resize-hide">Components</div>

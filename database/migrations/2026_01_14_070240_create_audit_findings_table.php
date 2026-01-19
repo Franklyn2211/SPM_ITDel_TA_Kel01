@@ -59,7 +59,7 @@ return new class extends Migration {
             // nomor temuan unik dalam 1 form temuan
             $table->unique(['audit_finding_form_id', 'finding_no'], 'uq_finding_no_per_form');
 
-            $table->index(['audit_finding_form_id', 'finding_type'], 'idx_form_type');
+            $table->index(['audit_finding_form_id'], 'idx_form_type');
         });
     }
 

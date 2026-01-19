@@ -6,9 +6,6 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
         Schema::create('self_evaluation_details', function (Blueprint $table) {
@@ -21,8 +18,9 @@ return new class extends Migration
             $table->string('status_id')->nullable();
 
             // Evaluation contents
-            $table->text('result')->nullable();                   // hasil
-            $table->text('contributing_factors')->nullable();     // faktor_penghambat_pendukung
+            $table->text('result')->nullable();                   // hasil (HTML dari summernote)
+            $table->string('supporting_evidence_url', 2048)->nullable(); // bukti pendukung (URL saja)
+            $table->text('contributing_factors')->nullable();     // faktor_penghambat_pendukung (HTML)
 
             // Audit trail
             $table->unsignedBigInteger('created_by')->nullable();
@@ -64,9 +62,6 @@ return new class extends Migration
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('self_evaluation_details');

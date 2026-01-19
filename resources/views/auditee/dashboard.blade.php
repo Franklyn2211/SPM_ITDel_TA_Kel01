@@ -136,10 +136,10 @@
                     action="{{ route('auditee.fed.submit', $form) }}"
                     onsubmit="return confirm('Kirim Form Evaluasi Diri sekarang? Setelah dikirim tidak dapat diedit.');">
                 @csrf
-                <button class="btn btn-success"
+                {{-- <button class="btn btn-success"
                         @if(!$canSubmit || $isLocked) disabled @endif>
                   <i class="ph-paper-plane-tilt me-2"></i> Submit
-                </button>
+                </button> --}}
               </form>
             @endif
           </div>

@@ -12,68 +12,91 @@ use Illuminate\Support\Facades\DB;
 class AuditChecklistController extends Controller
 {
     /**
-     * ONCE ONLY: checklist cuma bisa dibuat sekali dan tidak bisa diubah.
+     * Checklist bisa diubah (tambah/edit/hapus) selama indikator masih Ditolak.
+     * - Jika item punya id => update
+     * - Jika id kosong => insert baru
+     * - Jika delete=1 dan id ada => soft delete (active=0)
      */
-    public function bulkStoreOnce(Request $request, $detailId)
+    public function bulkUpsert(Request $request, $detailId)
     {
-        $this->validateBulk($request);
+        $data = $this->validateBulk($request);
 
         $detail = SelfEvaluationDetail::with(['status', 'auditChecklists'])
             ->findOrFail($detailId);
 
-        // Batasi hanya saat Ditolak (biar sesuai alur audit)
+        // Hanya saat Ditolak (sesuai alur audit)
         if (($detail->status->name ?? null) !== 'Ditolak') {
-            return back()->with('error', 'Daftar tilik hanya bisa dibuat saat indikator Ditolak.');
-        }
-
-        // Sudah ada => stop. Tidak bisa edit / replace.
-        if ($detail->auditChecklists()->exists()) {
-            return back()->with('error', 'Daftar tilik sudah dibuat dan tidak bisa diubah.');
+            return back()->with('error', 'Daftar tilik hanya bisa diubah saat indikator Ditolak.');
         }
 
         $userRole = Auth::user()->userRole ?? null;
 
-        DB::transaction(function () use ($request, $detail, $userRole) {
-            // ambil max nomor sekali
+        DB::transaction(function () use ($data, $detail, $userRole) {
+
+            // Existing aktif by id
+            $existing = $detail->auditChecklists()
+                ->where('active', 1)
+                ->get()
+                ->keyBy('id');
+
+            // Max number untuk id ACLxxx
             $maxNum = (int) AuditChecklist::where('id', 'like', 'ACL%')
                 ->selectRaw("MAX(CAST(SUBSTRING(id, 4) AS UNSIGNED)) as maxnum")
                 ->value('maxnum');
 
-            $now = now();
-            $payload = [];
+            foreach ($data['items'] as $x) {
+                $id       = $x['id'] ?? null;
+                $itemText = trim((string)($x['item'] ?? ''));
+                $noteText = isset($x['note']) ? trim((string)$x['note']) : null;
+                $toDelete = !empty($x['delete']);
 
-            foreach ($request->items as $x) {
-                $item = trim($x['item'] ?? '');
-                if ($item === '') continue;
+                // DELETE => soft delete
+                if ($toDelete && $id) {
+                    if ($existing->has($id)) {
+                        $existing[$id]->update([
+                            'active' => 0,
+                            'updated_by' => $userRole?->id,
+                        ]);
+                    }
+                    continue;
+                }
 
+                // UPDATE
+                if ($id && $existing->has($id)) {
+                    $existing[$id]->update([
+                        'item' => $itemText,
+                        'note' => $noteText ?: null,
+                        'updated_by' => $userRole?->id,
+                        'active' => 1,
+                    ]);
+                    continue;
+                }
+
+                // INSERT baru
                 $maxNum++;
-                $payload[] = [
-                    'id' => 'ACL' . str_pad((string) $maxNum, 3, '0', STR_PAD_LEFT),
+                AuditChecklist::create([
+                    'id' => 'ACL' . str_pad((string)$maxNum, 3, '0', STR_PAD_LEFT),
                     'self_evaluation_detail_id' => $detail->id,
-                    'item' => $item,
-                    'note' => !empty($x['note']) ? trim($x['note']) : null,
+                    'item' => $itemText,
+                    'note' => $noteText ?: null,
                     'created_by' => $userRole?->id,
                     'updated_by' => $userRole?->id,
-                    'active' => true,
-                    'created_at' => $now,
-                    'updated_at' => $now,
-                ];
-            }
-
-            if (!empty($payload)) {
-                DB::table('audit_checklists')->insert($payload);
+                    'active' => 1,
+                ]);
             }
         });
 
-        return back()->with('success', 'Daftar tilik berhasil disimpan (sekali saja).');
+        return back()->with('success', 'Daftar tilik berhasil disimpan.');
     }
 
-    private function validateBulk(Request $request): void
+    private function validateBulk(Request $request): array
     {
-        $request->validate([
+        return $request->validate([
             'items' => 'required|array|min:1|max:80',
+            'items.*.id' => 'nullable|string|max:64',
             'items.*.item' => 'required|string|max:255',
             'items.*.note' => 'nullable|string|max:1000',
+            'items.*.delete' => 'nullable|boolean',
         ]);
     }
 }

@@ -45,13 +45,23 @@
           </a>
         </li>
 
+
         <li class="nav-item">
-        <a href="{{ route('auditor.temuan.index') }}"
-            class="nav-link {{ request()->routeIs('auditor.temuan.*') ? 'active' : '' }}">
-            <i class="ph-clipboard-text"></i>
-            <span>Form Temuan</span>
-        </a>
+          <a href="{{ route('auditor.temuan.index') }}"
+              class="nav-link {{ request()->routeIs('auditor.temuan.*') ? 'active' : '' }}">
+              <i class="ph-clipboard-text"></i>
+              <span>Form Temuan</span>
+          </a>
         </li>
+
+        <li class="nav-item">
+          <a href="{{ route('auditor.atl.index') }}"
+              class="nav-link {{ request()->routeIs('auditor.atl.*') ? 'active' : '' }}">
+              <i class="ph-archive-box"></i>
+              <span>Form ATL</span>
+          </a>
+        </li>
+
 
 
       </ul>

@@ -29,7 +29,6 @@
           Status Temuan: {{ $form->status ?? 'Draft' }}
         </span>
 
-        {{-- Tombol aksi header --}}
         @if(!$isFinal)
           <button type="button" class="btn btn-outline-primary btn-sm rounded-pill"
                   data-bs-toggle="modal" data-bs-target="#modalHeader">
@@ -44,7 +43,6 @@
             </button>
           </form>
         @else
-          {{-- Setelah final: munculkan tombol unduh --}}
           <a class="btn btn-primary btn-sm rounded-pill"
              href="{{ route('auditor.temuan.exportPdf', $form->id) }}">
             <i class="ph-download-simple me-1"></i> Unduh PDF
@@ -130,8 +128,7 @@
           <span class="badge bg-info rounded-pill">{{ $progress['percent'] ?? 0 }}%</span>
         </div>
         <div class="text-muted fs-sm mt-2">
-          Catatan: baris boleh disimpan satu-satu. Final hanya bisa kalau semua lengkap.
-          (NEGATIF wajib isi kategori temuan)
+          Catatan: Auditor cuma isi <b>NEGATIF</b> (Kategori + Rekomendasi). Input auditee tidak ditampilkan sebagai form di sini.
         </div>
       </div>
     </div>
@@ -145,10 +142,17 @@
       $fed->member_auditee_3_name ?? null,
     ])->filter()->values()->implode(', ');
     $pjFed = $pjFed ?: '-';
+
+    $isFilled = function ($v) {
+      if (is_null($v)) return false;
+      $s = trim((string) $v);
+      $plain = trim(preg_replace('/\s+/', ' ', strip_tags($s)));
+      return $plain !== '';
+    };
   @endphp
 
   {{-- =======================
-       1) TEMUAN POSITIF
+       1) TEMUAN POSITIF (view only)
        ======================= --}}
   <div class="card mb-3">
     <div class="card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
@@ -170,8 +174,8 @@
             <th style="min-width:220px;">Faktor Pendukung (FED)</th>
             <th style="min-width:180px;">PIC Indikator (Role)</th>
             <th style="width:140px;" class="text-center">Jadwal</th>
-            <th style="width:140px;" class="text-center">Status Baris</th>
-            <th style="width:200px;">Aksi</th>
+            <th style="width:220px;" class="text-center">Status Baris</th>
+            <th style="width:160px;">Aksi</th>
           </tr>
         </thead>
 
@@ -195,19 +199,10 @@
                 ->implode(', ');
               $picsRole = $picsRole ?: '-';
 
-              $need = [
-                $r->control,
-                $r->improvement,
-                $r->follow_up_plan,
-                $r->auditor_recommendation,
-                $r->corrective_action_plan,
-                $r->due_date,
-              ];
-              $complete = true;
-              foreach ($need as $v) { if (is_null($v) || trim((string)$v)==='') { $complete=false; break; } }
+              $auditeeComplete = $isFilled($r->control) && $isFilled($r->improvement) && $isFilled($r->follow_up_plan) && !is_null($r->due_date);
+              $badgeRow = $auditeeComplete ? 'bg-success' : 'bg-secondary';
+              $statusText = 'Auditee: ' . ($auditeeComplete ? 'Lengkap' : 'Draft');
 
-              $badgeRow = $complete ? 'bg-success' : 'bg-secondary';
-              $statusText = $complete ? 'Lengkap' : 'Draft';
               $rowNo = $r->finding_no ?? $loop->iteration;
             @endphp
 
@@ -256,39 +251,27 @@
               </td>
 
               <td>
-                @if($isFinal)
-                  <div class="text-muted fs-sm">Terkunci.</div>
-                @else
-                  <button type="button"
-                          class="btn btn-sm btn-primary"
-                          data-bs-toggle="modal"
-                          data-bs-target="#modalEditRow"
+                <button type="button"
+                        class="btn btn-sm btn-outline-primary"
+                        data-bs-toggle="modal"
+                        data-bs-target="#modalPosView"
 
-                          data-update-url="{{ route('auditor.temuan.row.update', [$form->id, $r->id]) }}"
-                          data-is-negative="0"
-                          data-row-no="{{ $rowNo }}"
+                        data-row-no="{{ $rowNo }}"
+                        data-std-name="{{ e($stdName) }}"
+                        data-indikator-html-b64="{{ base64_encode($rawIndHtml) }}"
 
-                          data-std-name="{{ e($stdName) }}"
-                          data-indikator-html-b64="{{ base64_encode($rawIndHtml) }}"
+                        data-pj-fed="{{ e($pjFed) }}"
+                        data-pic-indikator="{{ e($picsRole) }}"
 
-                          data-pj-fed="{{ e($pjFed) }}"
-                          data-pic-indikator="{{ e($picsRole) }}"
+                        data-fed-result-b64="{{ base64_encode($fedResult) }}"
+                        data-fed-factors-b64="{{ base64_encode($fedFactors) }}"
 
-                          data-fed-result-b64="{{ base64_encode($fedResult) }}"
-                          data-fed-factors-b64="{{ base64_encode($fedFactors) }}"
-
-                          data-due="{{ $r->due_date ? \Carbon\Carbon::parse($r->due_date)->format('Y-m-d') : '' }}"
-                          data-severity=""
-
-                          data-control-b64="{{ base64_encode($r->control ?? '') }}"
-                          data-improvement-b64="{{ base64_encode($r->improvement ?? '') }}"
-                          data-follow-b64="{{ base64_encode($r->follow_up_plan ?? '') }}"
-                          data-recommend-b64="{{ base64_encode($r->auditor_recommendation ?? '') }}"
-                          data-cap-b64="{{ base64_encode($r->corrective_action_plan ?? '') }}"
-                  >
-                    <i class="ph-pencil-simple me-1"></i> Isi/Edit
-                  </button>
-                @endif
+                        data-due="{{ $r->due_date ? \Carbon\Carbon::parse($r->due_date)->format('Y-m-d') : '' }}"
+                        data-control-b64="{{ base64_encode($r->control ?? '') }}"
+                        data-improvement-b64="{{ base64_encode($r->improvement ?? '') }}"
+                        data-follow-b64="{{ base64_encode($r->follow_up_plan ?? '') }}">
+                  <i class="ph-eye me-1"></i> Lihat
+                </button>
               </td>
             </tr>
           @empty
@@ -325,8 +308,8 @@
             <th style="min-width:180px;">PIC Indikator (Role)</th>
             <th style="width:170px;" class="text-center">Kategori Temuan</th>
             <th style="width:140px;" class="text-center">Jadwal</th>
-            <th style="width:140px;" class="text-center">Status Baris</th>
-            <th style="width:200px;">Aksi</th>
+            <th style="width:240px;" class="text-center">Status Baris</th>
+            <th style="width:170px;">Aksi</th>
           </tr>
         </thead>
 
@@ -352,20 +335,13 @@
 
               $severityLabel = $r->severity ? ($severityOptions[$r->severity] ?? $r->severity) : null;
 
-              $need = [
-                $r->control,
-                $r->improvement,
-                $r->follow_up_plan,
-                $r->auditor_recommendation,
-                $r->corrective_action_plan,
-                $r->severity,
-                $r->due_date,
-              ];
-              $complete = true;
-              foreach ($need as $v) { if (is_null($v) || trim((string)$v)==='') { $complete=false; break; } }
+              $auditorComplete = $isFilled($r->severity) && $isFilled($r->auditor_recommendation);
+              $auditeeComplete = $isFilled($r->corrective_action_plan) && !is_null($r->due_date);
 
-              $badgeRow = $complete ? 'bg-success' : 'bg-secondary';
-              $statusText = $complete ? 'Lengkap' : 'Draft';
+              $overallComplete = $auditorComplete && $auditeeComplete;
+              $badgeRow = $overallComplete ? 'bg-success' : 'bg-secondary';
+              $statusText = 'Auditor: '.($auditorComplete?'Lengkap':'Draft').' | Auditee: '.($auditeeComplete?'Lengkap':'Draft');
+
               $rowNo = $r->finding_no ?? $loop->iteration;
             @endphp
 
@@ -421,15 +397,30 @@
 
               <td>
                 @if($isFinal)
-                  <div class="text-muted fs-sm">Terkunci.</div>
+                  <button type="button"
+                          class="btn btn-sm btn-outline-primary"
+                          data-bs-toggle="modal"
+                          data-bs-target="#modalNegView"
+                          data-row-no="{{ $rowNo }}"
+                          data-std-name="{{ e($stdName) }}"
+                          data-indikator-html-b64="{{ base64_encode($rawIndHtml) }}"
+                          data-pj-fed="{{ e($pjFed) }}"
+                          data-pic-indikator="{{ e($picsRole) }}"
+                          data-fed-result-b64="{{ base64_encode($fedResult) }}"
+                          data-fed-factors-b64="{{ base64_encode($fedFactors) }}"
+                          data-due="{{ $r->due_date ? \Carbon\Carbon::parse($r->due_date)->format('Y-m-d') : '' }}"
+                          data-severity="{{ e($r->severity ?? '') }}"
+                          data-recommend-b64="{{ base64_encode($r->auditor_recommendation ?? '') }}"
+                          data-cap-b64="{{ base64_encode($r->corrective_action_plan ?? '') }}">
+                    <i class="ph-eye me-1"></i> Lihat
+                  </button>
                 @else
                   <button type="button"
                           class="btn btn-sm btn-primary"
                           data-bs-toggle="modal"
-                          data-bs-target="#modalEditRow"
+                          data-bs-target="#modalNegAuditor"
 
-                          data-update-url="{{ route('auditor.temuan.row.update', [$form->id, $r->id]) }}"
-                          data-is-negative="1"
+                          data-update-url="{{ route('auditor.temuan.row.update.auditor', [$form->id, $r->id]) }}"
                           data-row-no="{{ $rowNo }}"
 
                           data-std-name="{{ e($stdName) }}"
@@ -444,13 +435,9 @@
                           data-due="{{ $r->due_date ? \Carbon\Carbon::parse($r->due_date)->format('Y-m-d') : '' }}"
                           data-severity="{{ e($r->severity ?? '') }}"
 
-                          data-control-b64="{{ base64_encode($r->control ?? '') }}"
-                          data-improvement-b64="{{ base64_encode($r->improvement ?? '') }}"
-                          data-follow-b64="{{ base64_encode($r->follow_up_plan ?? '') }}"
                           data-recommend-b64="{{ base64_encode($r->auditor_recommendation ?? '') }}"
-                          data-cap-b64="{{ base64_encode($r->corrective_action_plan ?? '') }}"
-                  >
-                    <i class="ph-pencil-simple me-1"></i> Isi/Edit
+                          data-cap-b64="{{ base64_encode($r->corrective_action_plan ?? '') }}">
+                    <i class="ph-pencil-simple me-1"></i> Isi Auditor
                   </button>
                 @endif
               </td>
@@ -506,7 +493,7 @@
 
       <div class="modal-body">
         <div class="alert alert-warning py-2">
-          Aksi ini hanya untuk Ketua Auditor / Admin. Kalau sudah Final, terkunci.
+          Ketua auditor ditentukan oleh Admin (tidak bisa diubah). Di sini hanya pilih anggota auditor.
         </div>
 
         <div class="mb-3">
@@ -524,38 +511,38 @@
 
         <div class="row g-3">
           <div class="col-md-6">
-            <label class="form-label fw-semibold">Ketua Auditor (User Role)</label>
-            <select name="auditor_user_role_id" class="form-select">
-              @foreach($auditorUserRoles as $ur)
-                @php
-                  $label = (optional($ur->user)->name ?: ('User#'.$ur->id))
-                          .' - '.(optional($ur->role)->name ?: 'Role');
-                @endphp
-                <option value="{{ $ur->id }}"
-                  @if(old('auditor_user_role_id', $form->auditor_user_role_id) == $ur->id) selected @endif>
-                  {{ $label }}
-                </option>
-              @endforeach
-            </select>
-            <div class="text-muted fs-sm mt-1">Ini yang berhak Final-kan form.</div>
+            <label class="form-label fw-semibold">Ketua Auditor</label>
+            <input type="text" class="form-control"
+                   value="{{ $form->auditorUserRole?->user?->name ?? '—' }}"
+                   readonly>
+            <div class="text-muted fs-sm mt-1">Tidak dapat diubah.</div>
           </div>
 
           <div class="col-md-6">
-            <label class="form-label fw-semibold">Anggota Auditor (User Role)</label>
-            <select name="member_auditor_user_role_id" class="form-select">
-              <option value="">— Tidak ada —</option>
-              @foreach($auditorUserRoles as $ur)
-                @php
-                  $label = (optional($ur->user)->name ?: ('User#'.$ur->id))
-                          .' - '.(optional($ur->role)->name ?: 'Role');
-                @endphp
-                <option value="{{ $ur->id }}"
-                  @if(old('member_auditor_user_role_id', $form->member_auditor_user_role_id) == $ur->id) selected @endif>
-                  {{ $label }}
+            <label class="form-label fw-semibold">Anggota Auditor</label>
+
+            {{-- Select2 AJAX --}}
+            <select name="member_auditor_user_role_id"
+                    id="member_auditor_user_role_id"
+                    class="form-control form-control-select2"
+                    data-placeholder="Cari nama auditor..."
+                    data-url="{{ route('auditor.temuan.searchAuditors') }}">
+              @php
+                $selected = old('member_auditor_user_role_id', $form->member_auditor_user_role_id);
+                // butuh relasi memberAuditorUserRole = UserRole (bukan User)
+                $selectedName = $form->memberAuditorUserRole?->user?->name
+                             ?? $form->memberAuditorUserRole?->user?->username;
+                $selectedRole = $form->memberAuditorUserRole?->role?->name;
+              @endphp
+
+              @if($selected)
+                <option value="{{ $selected }}" selected>
+                  {{ $selectedName ?? 'Tanpa Nama' }}{{ $selectedRole ? ' (' . $selectedRole . ')' : '' }}
                 </option>
-              @endforeach
+              @endif
             </select>
-            <div class="text-muted fs-sm mt-1">Anggota bisa edit baris, tapi tidak bisa Final-kan.</div>
+
+            <div class="text-muted fs-sm mt-1">Anggota bisa edit baris, tapi tidak bisa Final.</div>
           </div>
         </div>
       </div>
@@ -572,111 +559,243 @@
 @endif
 
 {{-- =======================
-     MODAL: EDIT BARIS TEMUAN
+     MODAL: POSITIF (VIEW ONLY)
      ======================= --}}
-@if(!$isFinal)
-<div class="modal fade" id="modalEditRow" tabindex="-1" aria-hidden="true" data-bs-focus="false">
+<div class="modal fade" id="modalPosView" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-xl">
-    <form method="POST" id="formEditRow" class="modal-content">
-      @csrf
-      @method('PUT')
-
+    <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title" id="editRowTitle">Isi Temuan</h5>
+        <h5 class="modal-title" id="posViewTitle">Detail Temuan Positif</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
       </div>
 
       <div class="modal-body">
-        <div class="alert alert-info py-2">
-          Baris boleh disimpan satu per satu. Final hanya bisa jika semua baris lengkap.
-          <span class="ms-2">Jenis Temuan: <strong id="editRowTypeLabel">-</strong></span>
+        <div class="alert alert-info py-2 mb-3">
+          Ini temuan <b>POSITIF</b>. Auditor hanya melihat.
         </div>
 
-        {{-- INFO DARI FED --}}
         <div class="card border mb-3">
           <div class="card-body">
             <div class="row g-3">
               <div class="col-md-6">
                 <div class="text-muted fs-sm">Penanggung Jawab (FED)</div>
-                <div class="fw-semibold" id="infoPjFed">-</div>
+                <div class="fw-semibold" id="pos_infoPjFed">-</div>
               </div>
               <div class="col-md-6">
                 <div class="text-muted fs-sm">PIC Indikator (Master - Role)</div>
-                <div class="fw-semibold" id="infoPicIndikator">-</div>
+                <div class="fw-semibold" id="pos_infoPicIndikator">-</div>
               </div>
 
               <div class="col-12">
                 <div class="text-muted fs-sm">Standar & Butir Mutu</div>
-                <div class="fw-semibold" id="infoStdName">-</div>
+                <div class="fw-semibold" id="pos_infoStdName">-</div>
                 <div class="text-muted fs-sm mt-1">Indikator</div>
-                <div class="border rounded p-2" id="infoIndikatorHtml" style="white-space: normal;"></div>
+                <div class="border rounded p-2" id="pos_infoIndikatorHtml" style="white-space: normal;"></div>
               </div>
 
               <div class="col-12">
-                <div class="text-muted fs-sm">Deskripsi Kondisi (Hasil Pelaksanaan Standar - FED)</div>
-                <div class="border rounded p-2" id="infoFedResult" style="white-space: normal;"></div>
+                <div class="text-muted fs-sm">Deskripsi Kondisi (FED)</div>
+                <div class="border rounded p-2" id="pos_infoFedResult" style="white-space: normal;"></div>
               </div>
               <div class="col-12">
-                <div class="text-muted fs-sm" id="labelFedFactors">Faktor (FED)</div>
-                <div class="border rounded p-2" id="infoFedFactors" style="white-space: normal;"></div>
+                <div class="text-muted fs-sm">Faktor Pendukung (FED)</div>
+                <div class="border rounded p-2" id="pos_infoFedFactors" style="white-space: normal;"></div>
               </div>
             </div>
           </div>
         </div>
 
-        <div class="mb-3">
-          <label class="form-label fw-semibold">Jadwal Penyelesaian</label>
-          <input type="date" name="due_date" id="edit_due" class="form-control">
+        <h6 class="mb-2">Input Auditee</h6>
+        <div class="row g-3">
+          <div class="col-md-4">
+            <div class="text-muted fs-sm">Jadwal Penyelesaian</div>
+            <div class="fw-semibold" id="pos_due">—</div>
+          </div>
+
+          <div class="col-12">
+            <div class="text-muted fs-sm">Pengendalian</div>
+            <div class="border rounded p-2" id="pos_control" style="white-space: normal;"></div>
+          </div>
+
+          <div class="col-12">
+            <div class="text-muted fs-sm">Peningkatan</div>
+            <div class="border rounded p-2" id="pos_improvement" style="white-space: normal;"></div>
+          </div>
+
+          <div class="col-12">
+            <div class="text-muted fs-sm">Rencana Tindak Lanjut</div>
+            <div class="border rounded p-2" id="pos_follow" style="white-space: normal;"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Tutup</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{{-- =======================
+     MODAL: NEGATIF (VIEW ONLY)
+     ======================= --}}
+<div class="modal fade" id="modalNegView" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-xl">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="negViewTitle">Detail Temuan Negatif</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
+      </div>
+
+      <div class="modal-body">
+        <div class="alert alert-info py-2 mb-3">
+          Form sudah Final. Tampilan hanya baca.
         </div>
 
-        {{-- Severity hanya NEGATIF --}}
-        <div class="mb-3" id="wrapSeverity" style="display:none;">
+        <div class="card border mb-3">
+          <div class="card-body">
+            <div class="row g-3">
+              <div class="col-md-6">
+                <div class="text-muted fs-sm">Penanggung Jawab (FED)</div>
+                <div class="fw-semibold" id="negv_infoPjFed">-</div>
+              </div>
+              <div class="col-md-6">
+                <div class="text-muted fs-sm">PIC Indikator (Master - Role)</div>
+                <div class="fw-semibold" id="negv_infoPicIndikator">-</div>
+              </div>
+
+              <div class="col-12">
+                <div class="text-muted fs-sm">Standar & Butir Mutu</div>
+                <div class="fw-semibold" id="negv_infoStdName">-</div>
+                <div class="text-muted fs-sm mt-1">Indikator</div>
+                <div class="border rounded p-2" id="negv_infoIndikatorHtml" style="white-space: normal;"></div>
+              </div>
+
+              <div class="col-12">
+                <div class="text-muted fs-sm">Deskripsi Kondisi (FED)</div>
+                <div class="border rounded p-2" id="negv_infoFedResult" style="white-space: normal;"></div>
+              </div>
+              <div class="col-12">
+                <div class="text-muted fs-sm">Faktor Penghambat (FED)</div>
+                <div class="border rounded p-2" id="negv_infoFedFactors" style="white-space: normal;"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="row g-3">
+          <div class="col-md-4">
+            <div class="text-muted fs-sm">Jadwal (Auditee)</div>
+            <div class="fw-semibold" id="negv_due">—</div>
+          </div>
+          <div class="col-md-4">
+            <div class="text-muted fs-sm">Kategori (Auditor)</div>
+            <div class="fw-semibold" id="negv_severity">—</div>
+          </div>
+        </div>
+
+        <div class="mt-3">
+          <div class="text-muted fs-sm">Rekomendasi Auditor</div>
+          <div class="border rounded p-2" id="negv_recommend" style="white-space: normal;"></div>
+        </div>
+
+        <div class="mt-3">
+          <div class="text-muted fs-sm">Rencana Tindakan Koreksi (Auditee)</div>
+          <div class="border rounded p-2" id="negv_cap" style="white-space: normal;"></div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Tutup</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{{-- =======================
+     MODAL: NEGATIF (AUDITOR EDIT ONLY)
+     ======================= --}}
+@if(!$isFinal)
+<div class="modal fade" id="modalNegAuditor" tabindex="-1" aria-hidden="true" data-bs-focus="false">
+  <div class="modal-dialog modal-xl">
+    <form method="POST" id="formNegAuditor" class="modal-content">
+      @csrf
+      @method('PUT')
+
+      <div class="modal-header">
+        <h5 class="modal-title" id="negAudTitle">Isi Auditor - Temuan Negatif</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
+      </div>
+
+      <div class="modal-body">
+        <div class="alert alert-warning py-2 mb-3">
+          Auditor <b>hanya</b> mengisi: <b>Kategori Temuan</b> dan <b>Rekomendasi Auditor</b>.
+          Input auditee ditampilkan read-only biar konteksnya ada.
+        </div>
+
+        <div class="card border mb-3">
+          <div class="card-body">
+            <div class="row g-3">
+              <div class="col-md-6">
+                <div class="text-muted fs-sm">Penanggung Jawab (FED)</div>
+                <div class="fw-semibold" id="nega_infoPjFed">-</div>
+              </div>
+              <div class="col-md-6">
+                <div class="text-muted fs-sm">PIC Indikator (Master - Role)</div>
+                <div class="fw-semibold" id="nega_infoPicIndikator">-</div>
+              </div>
+
+              <div class="col-12">
+                <div class="text-muted fs-sm">Standar & Butir Mutu</div>
+                <div class="fw-semibold" id="nega_infoStdName">-</div>
+                <div class="text-muted fs-sm mt-1">Indikator</div>
+                <div class="border rounded p-2" id="nega_infoIndikatorHtml" style="white-space: normal;"></div>
+              </div>
+
+              <div class="col-12">
+                <div class="text-muted fs-sm">Deskripsi Kondisi (FED)</div>
+                <div class="border rounded p-2" id="nega_infoFedResult" style="white-space: normal;"></div>
+              </div>
+              <div class="col-12">
+                <div class="text-muted fs-sm">Faktor Penghambat (FED)</div>
+                <div class="border rounded p-2" id="nega_infoFedFactors" style="white-space: normal;"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="row g-3 mb-2">
+          <div class="col-md-4">
+            <div class="text-muted fs-sm">Jadwal (Auditee)</div>
+            <div class="fw-semibold" id="nega_due">—</div>
+          </div>
+        </div>
+
+        <div class="mb-3">
           <label class="form-label fw-semibold">Kategori Temuan (Negatif)</label>
-          <select name="severity" id="edit_severity" class="form-select">
+          <select name="severity" id="nega_severity" class="form-select">
             <option value="">Pilih kategori…</option>
             @foreach(($severityOptions ?? []) as $val => $label)
               <option value="{{ $val }}">{{ $label }}</option>
             @endforeach
           </select>
-          <div class="text-muted fs-sm mt-1">
-            Sesuai template F-220: Observasi / KTS Minor / KTS Mayor.
-          </div>
-        </div>
-
-        <div class="mb-3">
-          <label class="form-label fw-semibold">Pengendalian</label>
-          <textarea name="control" id="edit_control" class="form-control summernote-temuan"></textarea>
-        </div>
-
-        <div class="mb-3">
-          <label class="form-label fw-semibold">Peningkatan</label>
-          <textarea name="improvement" id="edit_improvement" class="form-control summernote-temuan"></textarea>
-        </div>
-
-        <div class="mb-3">
-          <label class="form-label fw-semibold">Rencana Tindak Lanjut</label>
-          <textarea name="follow_up_plan" id="edit_follow" class="form-control summernote-temuan"></textarea>
         </div>
 
         <div class="mb-3">
           <label class="form-label fw-semibold">Rekomendasi Auditor</label>
-          <textarea name="auditor_recommendation" id="edit_recommend" class="form-control summernote-temuan"></textarea>
+          <textarea name="auditor_recommendation" id="nega_recommend" class="form-control summernote-auditor"></textarea>
         </div>
 
         <div class="mb-3">
-          <label class="form-label fw-semibold">Rencana Tindakan Koreksi</label>
-          <textarea name="corrective_action_plan" id="edit_cap" class="form-control summernote-temuan"></textarea>
-        </div>
-
-        <div class="text-muted fs-sm mt-3">
-          <b>NEGATIF</b>: kategori temuan wajib saat Final. <b>POSITIF</b>: kategori tidak ada.
+          <div class="text-muted fs-sm">Rencana Tindakan Koreksi (Auditee)</div>
+          <div class="border rounded p-2" id="nega_cap" style="white-space: normal;"></div>
         </div>
       </div>
 
       <div class="modal-footer">
         <button type="button" class="btn btn-light" data-bs-dismiss="modal">Tutup</button>
         <button type="submit" class="btn btn-primary">
-          <i class="ph-floppy-disk me-1"></i> Simpan
+          <i class="ph-floppy-disk me-1"></i> Simpan (Auditor)
         </button>
       </div>
     </form>
@@ -691,10 +810,16 @@
   .note-editor.note-frame { border: 1px solid #ddd; }
   .note-editing-area { min-height: 150px; }
   .modal-xl { max-width: 1140px; }
-  #modalEditRow .modal-body { max-height: calc(100vh - 200px); overflow-y: auto; }
+
+  #modalNegAuditor .modal-body,
+  #modalPosView .modal-body,
+  #modalNegView .modal-body {
+    max-height: calc(100vh - 200px);
+    overflow-y: auto;
+  }
+
   .table td { vertical-align: top; }
 
-  /* Summernote dialog di atas Bootstrap modal */
   .note-modal { z-index: 1065 !important; }
   .note-popover { z-index: 1065 !important; }
   .note-toolbar { z-index: 1065; }
@@ -704,17 +829,102 @@
 @endpush
 
 @push('scripts')
+<script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/summernote@0.8.20/dist/summernote-lite.min.js"></script>
 
 <script>
+  // Utils
   function safeHtml(html) {
     return html && String(html).trim() !== '' ? html : '<span class="text-muted">-</span>';
   }
-
   function b64decode(str) {
     if (!str) return '';
     try { return atob(str); } catch (e) { return ''; }
   }
+  function dashIfEmpty(v) {
+    const s = (v ?? '').toString().trim();
+    return s === '' ? '—' : s;
+  }
+
+  // ================== SELECT2 AJAX ANGGOTA AUDITOR ==================
+  (function () {
+    const modalEl = document.getElementById('modalHeader');
+    if (!modalEl) return;
+
+    modalEl.addEventListener('shown.bs.modal', function () {
+      const $el = $('#member_auditor_user_role_id');
+      if (!$el.length) return;
+
+      const url = $el.data('url');
+      if (!url) return;
+
+      if ($el.hasClass('select2-hidden-accessible')) {
+        $el.select2('destroy');
+      }
+
+      $el.select2({
+        width: '100%',
+        dropdownParent: $('#modalHeader'),
+        placeholder: $el.data('placeholder') || 'Cari nama auditor...',
+        allowClear: true,
+        minimumInputLength: 1,
+        ajax: {
+          url: url,
+          dataType: 'json',
+          delay: 250,
+          data: function (params) {
+            return { q: params.term || '' };
+          },
+          processResults: function (data) {
+            return {
+              results: (data || []).map(function (item) {
+                // backend idealnya ngirim {id, text, role_name}
+                return {
+                  id: item.id,
+                  text: item.text || item.name || 'Tanpa Nama',
+                  role: item.role_name || item.role || null
+                };
+              })
+            };
+          },
+          cache: true
+        },
+        templateResult: function (data) {
+          if (!data.id) return data.text;
+          const $wrap = $('<div class="d-flex flex-column"></div>');
+          $('<div class="fw-semibold"></div>').text(data.text).appendTo($wrap);
+          if (data.role) $('<div class="text-muted small"></div>').text(data.role).appendTo($wrap);
+          return $wrap;
+        },
+        templateSelection: function (data) {
+          if (!data.id) return $el.data('placeholder') || 'Pilih auditor';
+          return data.text + (data.role ? ' (' + data.role + ')' : '');
+        }
+      });
+    });
+
+    modalEl.addEventListener('hidden.bs.modal', function () {
+      const $el = $('#member_auditor_user_role_id');
+      if ($el.hasClass('select2-hidden-accessible')) {
+        $el.select2('destroy');
+      }
+    });
+  })();
+
+  // === Summernote custom button ===
+  const AlphaListButton = function (context) {
+    const ui = $.summernote.ui;
+    const button = ui.button({
+      contents: '<i class="note-icon-unorderedlist"></i> a.',
+      tooltip: 'Insert alphabetic list (a., b., c.)',
+      click: function () {
+        const template = '<ol type="a"><li></li></ol><p></p>';
+        context.invoke('editor.pasteHTML', template);
+      }
+    });
+    return button.render();
+  };
 
   // Modal indikator HTML (full)
   (function () {
@@ -729,32 +939,97 @@
       const bodyEl  = document.getElementById('modalDesc_body');
 
       if (titleEl) titleEl.textContent = title;
-      if (!bodyEl) return;
-
-      bodyEl.innerHTML = safeHtml(b64decode(b64));
+      if (bodyEl) bodyEl.innerHTML = safeHtml(b64decode(b64));
     });
   })();
 
-  // Kalau form final: jangan inisialisasi summernote sama sekali (ngapain, wong read-only).
-  @if(!$isFinal)
-  // Tombol custom: list a, b, c
-  const AlphaListButton = function (context) {
-    const ui = $.summernote.ui;
-    const button = ui.button({
-      contents: '<i class="note-icon-unorderedlist"></i> a.',
-      tooltip: 'Daftar alfabet (a, b, c)',
-      click: function () {
-        context.invoke('editor.pasteHTML', '<ol type="a"><li></li></ol><p></p>');
-      }
+  // POSITIF VIEW modal
+  (function () {
+    const modal = document.getElementById('modalPosView');
+    if (!modal) return;
+
+    const titleEl = document.getElementById('posViewTitle');
+
+    const infoPjFed = document.getElementById('pos_infoPjFed');
+    const infoPicInd = document.getElementById('pos_infoPicIndikator');
+    const infoStd = document.getElementById('pos_infoStdName');
+    const infoIndHtml = document.getElementById('pos_infoIndikatorHtml');
+    const infoFedResult = document.getElementById('pos_infoFedResult');
+    const infoFedFactors = document.getElementById('pos_infoFedFactors');
+
+    const due = document.getElementById('pos_due');
+    const control = document.getElementById('pos_control');
+    const improvement = document.getElementById('pos_improvement');
+    const follow = document.getElementById('pos_follow');
+
+    modal.addEventListener('show.bs.modal', function (ev) {
+      const btn = ev.relatedTarget;
+      const rowNo = btn?.getAttribute('data-row-no') || '';
+
+      if (titleEl) titleEl.textContent = `Detail Temuan Positif - Baris #${rowNo}`;
+
+      if (infoPjFed) infoPjFed.textContent = btn.getAttribute('data-pj-fed') || '-';
+      if (infoPicInd) infoPicInd.textContent = btn.getAttribute('data-pic-indikator') || '-';
+      if (infoStd) infoStd.textContent = btn.getAttribute('data-std-name') || '-';
+      if (infoIndHtml) infoIndHtml.innerHTML = safeHtml(b64decode(btn.getAttribute('data-indikator-html-b64')));
+
+      if (infoFedResult) infoFedResult.innerHTML = safeHtml(b64decode(btn.getAttribute('data-fed-result-b64')));
+      if (infoFedFactors) infoFedFactors.innerHTML = safeHtml(b64decode(btn.getAttribute('data-fed-factors-b64')));
+
+      if (due) due.textContent = dashIfEmpty(btn.getAttribute('data-due'));
+      if (control) control.innerHTML = safeHtml(b64decode(btn.getAttribute('data-control-b64')));
+      if (improvement) improvement.innerHTML = safeHtml(b64decode(btn.getAttribute('data-improvement-b64')));
+      if (follow) follow.innerHTML = safeHtml(b64decode(btn.getAttribute('data-follow-b64')));
     });
-    return button.render();
-  };
+  })();
 
-  let summernoteTemuanInit = false;
-  function initSummernoteTemuan() {
-    if (summernoteTemuanInit) return;
+  // NEGATIF VIEW modal (final)
+  (function () {
+    const modal = document.getElementById('modalNegView');
+    if (!modal) return;
 
-    $('.summernote-temuan').summernote({
+    const titleEl = document.getElementById('negViewTitle');
+
+    const infoPjFed = document.getElementById('negv_infoPjFed');
+    const infoPicInd = document.getElementById('negv_infoPicIndikator');
+    const infoStd = document.getElementById('negv_infoStdName');
+    const infoIndHtml = document.getElementById('negv_infoIndikatorHtml');
+    const infoFedResult = document.getElementById('negv_infoFedResult');
+    const infoFedFactors = document.getElementById('negv_infoFedFactors');
+
+    const due = document.getElementById('negv_due');
+    const sev = document.getElementById('negv_severity');
+    const rec = document.getElementById('negv_recommend');
+    const cap = document.getElementById('negv_cap');
+
+    modal.addEventListener('show.bs.modal', function (ev) {
+      const btn = ev.relatedTarget;
+      const rowNo = btn?.getAttribute('data-row-no') || '';
+      if (titleEl) titleEl.textContent = `Detail Temuan Negatif - Baris #${rowNo}`;
+
+      if (infoPjFed) infoPjFed.textContent = btn.getAttribute('data-pj-fed') || '-';
+      if (infoPicInd) infoPicInd.textContent = btn.getAttribute('data-pic-indikator') || '-';
+      if (infoStd) infoStd.textContent = btn.getAttribute('data-std-name') || '-';
+      if (infoIndHtml) infoIndHtml.innerHTML = safeHtml(b64decode(btn.getAttribute('data-indikator-html-b64')));
+
+      if (infoFedResult) infoFedResult.innerHTML = safeHtml(b64decode(btn.getAttribute('data-fed-result-b64')));
+      if (infoFedFactors) infoFedFactors.innerHTML = safeHtml(b64decode(btn.getAttribute('data-fed-factors-b64')));
+
+      if (due) due.textContent = dashIfEmpty(btn.getAttribute('data-due'));
+      if (sev) sev.textContent = dashIfEmpty(btn.getAttribute('data-severity'));
+      if (rec) rec.innerHTML = safeHtml(b64decode(btn.getAttribute('data-recommend-b64')));
+      if (cap) cap.innerHTML = safeHtml(b64decode(btn.getAttribute('data-cap-b64')));
+    });
+  })();
+
+  // NEGATIF AUDITOR modal (edit)
+  @if(!$isFinal)
+  let snAudInit = false;
+  function initSummernoteAuditor() {
+    if (snAudInit) return;
+
+    $('.summernote-auditor').summernote({
+      placeholder: 'Tulis deskripsi di sini...',
       height: 180,
       toolbar: [
         ['style', ['style']],
@@ -770,107 +1045,65 @@
         ['view', ['fullscreen', 'codeview', 'help']]
       ],
       buttons: { alphaList: AlphaListButton },
-      placeholder: 'Tuliskan di sini...',
-      tabsize: 2,
       dialogsInBody: true
     });
 
-    summernoteTemuanInit = true;
+    snAudInit = true;
   }
 
-  // Modal Edit Row (ambil dari data-* seperti FED)
   (function () {
-    const modal = document.getElementById('modalEditRow');
-    const form  = document.getElementById('formEditRow');
+    const modal = document.getElementById('modalNegAuditor');
+    const form = document.getElementById('formNegAuditor');
     if (!modal || !form) return;
 
-    const titleEl = document.getElementById('editRowTitle');
-    const typeEl  = document.getElementById('editRowTypeLabel');
+    const titleEl = document.getElementById('negAudTitle');
 
-    const wrapSeverity = document.getElementById('wrapSeverity');
-    const selectSeverity = document.getElementById('edit_severity');
-    const inputDue = document.getElementById('edit_due');
+    const infoPjFed = document.getElementById('nega_infoPjFed');
+    const infoPicInd = document.getElementById('nega_infoPicIndikator');
+    const infoStd = document.getElementById('nega_infoStdName');
+    const infoIndHtml = document.getElementById('nega_infoIndikatorHtml');
+    const infoFedResult = document.getElementById('nega_infoFedResult');
+    const infoFedFactors = document.getElementById('nega_infoFedFactors');
 
-    const infoPjFed = document.getElementById('infoPjFed');
-    const infoPicInd = document.getElementById('infoPicIndikator');
-    const infoFedResult = document.getElementById('infoFedResult');
-    const infoFedFactors = document.getElementById('infoFedFactors');
-    const labelFedFactors = document.getElementById('labelFedFactors');
-
-    const infoStdName = document.getElementById('infoStdName');
-    const infoIndikatorHtml = document.getElementById('infoIndikatorHtml');
+    const due = document.getElementById('nega_due');
+    const sevSel = document.getElementById('nega_severity');
+    const cap = document.getElementById('nega_cap');
 
     modal.addEventListener('show.bs.modal', function (ev) {
       const btn = ev.relatedTarget;
       if (!btn) return;
 
-      initSummernoteTemuan();
+      initSummernoteAuditor();
 
-      const updateUrl = btn.getAttribute('data-update-url') || '';
-      const isNeg = (btn.getAttribute('data-is-negative') || '0') === '1';
       const rowNo = btn.getAttribute('data-row-no') || '';
-
+      const updateUrl = btn.getAttribute('data-update-url') || '';
       form.action = updateUrl;
 
-      if (titleEl) titleEl.textContent = `Isi Temuan - Baris #${rowNo}`;
-      if (typeEl) typeEl.textContent = isNeg ? 'NEGATIF' : 'POSITIF';
-
-      if (labelFedFactors) labelFedFactors.textContent = isNeg ? 'Faktor Penghambat (FED)' : 'Faktor Pendukung (FED)';
+      if (titleEl) titleEl.textContent = `Isi Auditor - Temuan Negatif (Baris #${rowNo})`;
 
       if (infoPjFed) infoPjFed.textContent = btn.getAttribute('data-pj-fed') || '-';
       if (infoPicInd) infoPicInd.textContent = btn.getAttribute('data-pic-indikator') || '-';
-
-      if (infoStdName) infoStdName.textContent = btn.getAttribute('data-std-name') || '-';
-      if (infoIndikatorHtml) infoIndikatorHtml.innerHTML = safeHtml(b64decode(btn.getAttribute('data-indikator-html-b64')));
+      if (infoStd) infoStd.textContent = btn.getAttribute('data-std-name') || '-';
+      if (infoIndHtml) infoIndHtml.innerHTML = safeHtml(b64decode(btn.getAttribute('data-indikator-html-b64')));
 
       if (infoFedResult) infoFedResult.innerHTML = safeHtml(b64decode(btn.getAttribute('data-fed-result-b64')));
       if (infoFedFactors) infoFedFactors.innerHTML = safeHtml(b64decode(btn.getAttribute('data-fed-factors-b64')));
 
-      inputDue.value = btn.getAttribute('data-due') || '';
-
-      if (isNeg) {
-        wrapSeverity.style.display = '';
-        selectSeverity.disabled = false;
-        selectSeverity.value = btn.getAttribute('data-severity') || '';
-      } else {
-        wrapSeverity.style.display = 'none';
-        selectSeverity.disabled = true;
-        selectSeverity.value = '';
-      }
-
-      $(modal).find('.modal-body').scrollTop(0);
+      if (due) due.textContent = dashIfEmpty(btn.getAttribute('data-due'));
+      if (sevSel) sevSel.value = btn.getAttribute('data-severity') || '';
+      if (cap) cap.innerHTML = safeHtml(b64decode(btn.getAttribute('data-cap-b64')));
 
       setTimeout(() => {
-        $('#edit_control').summernote('code', b64decode(btn.getAttribute('data-control-b64')));
-        $('#edit_improvement').summernote('code', b64decode(btn.getAttribute('data-improvement-b64')));
-        $('#edit_follow').summernote('code', b64decode(btn.getAttribute('data-follow-b64')));
-        $('#edit_recommend').summernote('code', b64decode(btn.getAttribute('data-recommend-b64')));
-        $('#edit_cap').summernote('code', b64decode(btn.getAttribute('data-cap-b64')));
-      }, 80);
+        $('#nega_recommend').summernote('code', b64decode(btn.getAttribute('data-recommend-b64')));
+      }, 50);
+
+      $(modal).find('.modal-body').scrollTop(0);
     });
 
     modal.addEventListener('hidden.bs.modal', function () {
       form.action = '';
-      inputDue.value = '';
-      wrapSeverity.style.display = 'none';
-      selectSeverity.disabled = false;
-      selectSeverity.value = '';
-
-      if (infoPjFed) infoPjFed.textContent = '-';
-      if (infoPicInd) infoPicInd.textContent = '-';
-      if (infoStdName) infoStdName.textContent = '-';
-      if (infoIndikatorHtml) infoIndikatorHtml.innerHTML = '';
-      if (infoFedResult) infoFedResult.innerHTML = '';
-      if (infoFedFactors) infoFedFactors.innerHTML = '';
-      if (labelFedFactors) labelFedFactors.textContent = 'Faktor (FED)';
-
-      if (summernoteTemuanInit) {
-        $('#edit_control').summernote('code', '');
-        $('#edit_improvement').summernote('code', '');
-        $('#edit_follow').summernote('code', '');
-        $('#edit_recommend').summernote('code', '');
-        $('#edit_cap').summernote('code', '');
-      }
+      if (sevSel) sevSel.value = '';
+      if (snAudInit) $('#nega_recommend').summernote('code', '');
     });
   })();
   @endif

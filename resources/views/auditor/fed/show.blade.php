@@ -18,17 +18,17 @@
     </div>
 
     @php
-    $allApproved = $form->details->count() > 0
-        && $form->details->every(fn($d) => (($d->status->name ?? '') === 'Disetujui'));
+      $allApproved = $form->details->count() > 0
+          && $form->details->every(fn($d) => (($d->status->name ?? '') === 'Disetujui'));
     @endphp
     <div class="collapse d-lg-block my-lg-auto ms-lg-auto" id="page_header">
-        <div class="d-lg-flex align-items-center gap-2">
-            @if($allApproved)
-            <a href="{{ route('auditor.fed.exportPdf', $form->id) }}" class="btn btn-outline-danger btn-sm rounded-pill">
-                <i class="ph-download-simple me-2"></i> Unduh PDF
-            </a>
-            @endif
-        </div>
+      <div class="d-lg-flex align-items-center gap-2">
+        @if($allApproved)
+          <a href="{{ route('auditor.fed.exportPdf', $form->id) }}" class="btn btn-outline-danger btn-sm rounded-pill">
+            <i class="ph-download-simple me-2"></i> Unduh PDF
+          </a>
+        @endif
+      </div>
     </div>
   </div>
 
@@ -46,16 +46,6 @@
         @if($form->academicConfig)
           <div><i class="ph-calendar me-1"></i> {{ $form->academicConfig->name ?? $form->academicConfig->tahun }}</div>
         @endif
-
-        @php
-          $formStatus = $form->status->name ?? 'Draft';
-          $formBadge = match($formStatus) {
-            'Disetujui' => 'bg-success',
-            'Ditolak'   => 'bg-danger',
-            'Dikirim'   => 'bg-info',
-            default     => 'bg-secondary',
-          };
-        @endphp
       </div>
     </div>
   </div>
@@ -149,11 +139,7 @@
     </div>
 
     <div class="table-responsive">
-
-      @php
-        // Ambil data detail dari controller (sudah dipaginasi)
-        $filteredDetails = $details ?? collect();
-      @endphp
+      @php $filteredDetails = $details ?? collect(); @endphp
 
       <table class="table table-hover align-top mb-0" id="tableFedAuditor">
         <thead class="table-light">
@@ -162,7 +148,7 @@
             <th style="min-width: 320px;">Standar & Indikator</th>
             <th style="min-width: 560px;">Isi FED (Auditee)</th>
             <th style="width: 140px;" class="text-center">Status</th>
-            <th style="width: 280px;">Aksi Auditor</th>
+            <th style="width: 320px;">Aksi Auditor</th>
           </tr>
         </thead>
 
@@ -178,7 +164,6 @@
               };
 
               $stdName = optional($detail->indicator->standard)->name ?? 'Standar';
-
               $rawDesc = $detail->indicator->description ?? '';
               $plainDesc = trim(preg_replace('/\s+/', ' ', strip_tags($rawDesc)));
               $shortDesc = \Illuminate\Support\Str::limit($plainDesc, 160);
@@ -191,20 +176,32 @@
 
               $collapseId = "fedDetail_{$detail->id}";
 
-              // Checklist preview for modal (read-only display)
-              $checklistHtml = '';
-              if ($detail->auditChecklists && $detail->auditChecklists->count() > 0) {
-                $checklistHtml .= '<ol class="mb-0 ps-3">';
-                foreach ($detail->auditChecklists as $cl) {
-                  $item = e($cl->item);
-                  $note = $cl->note ? '<div class="text-muted fs-sm">'.e($cl->note).'</div>' : '';
-                  $checklistHtml .= "<li class='mb-2'><div class='fw-semibold'>{$item}</div>{$note}</li>";
-                }
-                $checklistHtml .= '</ol>';
-              } else {
-                $checklistHtml = '<div class="text-muted">Belum ada daftar tilik.</div>';
-              }
-              $checklistB64 = base64_encode($checklistHtml);
+              $activeCls = collect($detail->auditChecklists ?? [])
+                ->filter(fn($c) => (bool)($c->active ?? true))
+                ->values();
+
+              $checklists = $activeCls->map(fn($c) => [
+                'id' => $c->id,
+                'item' => $c->item,
+                'note' => $c->note,
+              ]);
+
+              $checklistsJsonB64 = base64_encode($checklists->toJson());
+
+              // html -> base64 untuk modal edit (biar aman di attr)
+              $hasilB64  = base64_encode($detail->result ?? '');
+              $faktorB64 = base64_encode($detail->contributing_factors ?? '');
+
+              // URL bukti (sesuaikan nama kolom lu di DB)
+              $buktiUrl = $detail->supporting_evidence_url
+                ?? $detail->evidence_url
+                ?? $detail->bukti_pendukung_url
+                ?? null;
+
+              $buktiUrlB64 = base64_encode((string)($buktiUrl ?? ''));
+
+              $posTemplate = $detail->indicator->positive_result_template ?? '';
+              $negTemplate = $detail->indicator->negative_result_template ?? '';
             @endphp
 
             <tr id="detail-{{ $detail->id }}">
@@ -219,7 +216,7 @@
                         class="btn btn-link p-0 fs-sm mt-1"
                         data-bs-toggle="modal"
                         data-bs-target="#modalDesc"
-                        data-title="{{ $stdName }}"
+                        data-title="{{ e($stdName) }}"
                         data-desc-html="{{ base64_encode($rawDesc) }}">
                   Lihat indikator lengkap
                 </button>
@@ -233,8 +230,19 @@
                   </span>
 
                   <span class="text-muted fs-sm">
-                    Checklist: <strong>{{ $detail->auditChecklists->count() }}</strong>
+                    Checklist aktif: <strong>{{ $activeCls->count() }}</strong>
                   </span>
+
+                  @if(!empty($buktiUrl))
+                    <a class="badge bg-dark rounded-pill text-decoration-none"
+                       href="{{ $buktiUrl }}"
+                       target="_blank"
+                       rel="noopener noreferrer">
+                      Bukti: buka link
+                    </a>
+                  @else
+                    <span class="badge bg-light text-muted rounded-pill">Bukti: -</span>
+                  @endif
                 </div>
 
                 <div class="text-muted fs-sm mb-1">Hasil (ringkas)</div>
@@ -258,13 +266,20 @@
 
                     <hr class="my-3">
 
-                    <div class="text-muted fs-sm mb-1">Faktor Penghambat / Pendukung</div>
+                    <div class="text-muted fs-sm mb-1">Bukti Pendukung</div>
                     <div class="fs-sm">
-                      @if($detail->contributing_factors)
-                        {!! nl2br(e($detail->contributing_factors)) !!}
+                      @if(!empty($buktiUrl))
+                        <a href="{{ $buktiUrl }}" target="_blank" rel="noopener noreferrer">{{ $buktiUrl }}</a>
                       @else
                         <span class="text-muted">Belum diisi.</span>
                       @endif
+                    </div>
+
+                    <hr class="my-3">
+
+                    <div class="text-muted fs-sm mb-1">Faktor Penghambat / Pendukung</div>
+                    <div class="fs-sm">
+                      {!! $detail->contributing_factors ?: '<span class="text-muted">Belum diisi.</span>' !!}
                     </div>
                   </div>
                 </div>
@@ -293,14 +308,13 @@
 
                 @elseif($statusNameDetail === 'Ditolak')
                   <div class="d-flex flex-wrap gap-2 mb-2">
-                    {{-- Checklist modal (ONCE ONLY) --}}
+                    {{-- Checklist modal (EDITABLE) --}}
                     <button type="button"
                       class="btn btn-sm btn-outline-primary"
                       data-bs-toggle="modal"
                       data-bs-target="#modalChecklist"
-                      data-has-checklist="{{ $detail->auditChecklists->count() > 0 ? 1 : 0 }}"
-                      data-existing-b64="{{ $checklistB64 }}"
-                      data-action="{{ route('auditor.checklists.bulkStoreOnce', $detail->id) }}">
+                      data-existing-json-b64="{{ $checklistsJsonB64 }}"
+                      data-action="{{ route('auditor.checklists.bulkUpsert', $detail->id) }}">
                       Daftar Tilik
                     </button>
 
@@ -311,19 +325,19 @@
                       data-bs-target="#modalEditFedAuditor"
                       data-update-url="{{ route('auditor.fed.details.update', [$form->id, $detail->id]) }}"
                       data-ketercapaian="{{ $detail->standard_achievement_id ?? '' }}"
-                      data-hasil="{{ e($detail->result ?? '') }}"
-                      data-faktor="{{ e($detail->contributing_factors ?? '') }}"
-                      data-pos-template="{{ e($detail->indicator->positive_result_template ?? '') }}"
-                      data-neg-template="{{ e($detail->indicator->negative_result_template ?? '') }}">
+                      data-hasil-b64="{{ $hasilB64 }}"
+                      data-faktor-b64="{{ $faktorB64 }}"
+                      data-bukti-url-b64="{{ $buktiUrlB64 }}"
+                      data-pos-template="{{ base64_encode($posTemplate) }}"
+                      data-neg-template="{{ base64_encode($negTemplate) }}">
                       Isi/Edit FED
                     </button>
                   </div>
 
                   <div class="text-muted fs-sm">
-                    Daftar tilik dibuat <strong>sekali</strong> dan tidak bisa diubah.
-                    Setelah simpan hasil final, indikator otomatis <strong>Disetujui</strong>.
+                    Checklist <strong>bisa diedit</strong> selama status indikator masih <strong>Ditolak</strong>.
+                    Setelah simpan isi FED auditor, status indikator jadi <strong>Disetujui</strong>.
                   </div>
-
                 @else
                   <div class="text-muted fs-sm">Tidak ada aksi.</div>
                 @endif
@@ -358,7 +372,7 @@
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
       </div>
       <div class="modal-body">
-        <div id="modalDesc_body"></div>
+        <div id="modalDesc_body" style="white-space: normal;"></div>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-light" data-bs-dismiss="modal">Tutup</button>
@@ -367,7 +381,7 @@
   </div>
 </div>
 
-{{-- ================== MODAL: CHECKLIST (ONCE, READ-ONLY IF EXISTS) ================== --}}
+{{-- ================== MODAL: CHECKLIST (EDITABLE) ================== --}}
 <div class="modal fade" id="modalChecklist" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-lg">
     <form method="POST" id="formChecklist" class="modal-content">
@@ -379,38 +393,35 @@
       </div>
 
       <div class="modal-body">
-        <div class="alert alert-info py-2 mb-3" id="checklistHint">
-          Buat daftar tilik sekaligus. Setelah disimpan, tidak bisa diubah.
+        <div id="checklistHint" class="alert alert-info py-2 mb-3">
+          Buat/ubah daftar tilik. Hanya bisa saat status indikator <b>Ditolak</b>.
         </div>
 
-        <div id="checklistExistingWrap" class="mb-3 d-none">
-          <div class="fw-semibold mb-2">Checklist yang sudah tersimpan</div>
-          <div class="border rounded p-2 bg-light" style="max-height:240px; overflow:auto;">
-            <div id="checklistExistingBody"></div>
-          </div>
-        </div>
-
-        <div id="checklistInputWrap">
-          <div class="fw-semibold mb-2">Input checklist</div>
-          <div id="checklistRows" class="d-flex flex-column gap-2"></div>
-
-          <button type="button" class="btn btn-sm btn-outline-primary mt-2" id="btnAddChecklistRow">
-            <i class="ph-plus me-1"></i> Tambah Item
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <div class="fw-semibold">Item Checklist</div>
+          <button type="button" class="btn btn-sm btn-outline-primary" id="btnAddChecklistRow">
+            <i class="ph-plus me-1"></i> Tambah Baris
           </button>
+        </div>
+
+        <div id="checklistRows" class="d-flex flex-column gap-2"></div>
+
+        <div class="text-muted fs-sm mt-2">
+          Tombol “Hapus” akan menonaktifkan item (active=0). Item baru akan hilang jika dihapus sebelum disimpan.
         </div>
       </div>
 
       <div class="modal-footer">
         <button type="button" class="btn btn-light" data-bs-dismiss="modal">Tutup</button>
         <button type="submit" class="btn btn-primary" id="btnSaveChecklist">
-          Simpan (Sekali Saja)
+          <i class="ph-floppy-disk me-1"></i> Simpan
         </button>
       </div>
     </form>
   </div>
 </div>
 
-{{-- ================== MODAL: EDIT FED AUDITOR (TANPA BUKTI) ================== --}}
+{{-- ================== MODAL: EDIT FED AUDITOR (DENGAN BUKTI URL) ================== --}}
 <div class="modal fade" id="modalEditFedAuditor" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-xl">
     <form method="POST" id="formEditFedAuditor" class="modal-content">
@@ -443,8 +454,20 @@
         </div>
 
         <div class="mb-4">
-          <label class="form-label fw-semibold">Hasil Pelaksanaan (bukti ditulis di sini)</label>
+          <label class="form-label fw-semibold">Hasil Pelaksanaan</label>
           <textarea name="hasil" id="modal_auditor_hasil" class="form-control summernote-fed"></textarea>
+        </div>
+
+        <div class="mb-4">
+          <label class="form-label fw-semibold">Bukti Pendukung (URL)</label>
+          <input type="url"
+                 name="bukti_pendukung"
+                 id="modal_auditor_bukti_url"
+                 class="form-control"
+                 placeholder="https://drive.google.com/..."
+                 autocomplete="off">
+          <div class="invalid-feedback">URL tidak valid. Contoh: https://drive.google.com/...</div>
+          <div class="form-text">Simpan URL saja. Jangan tempel HTML.</div>
         </div>
 
         <div class="mb-3">
@@ -476,6 +499,8 @@
   .modal-xl { max-width: 1140px; }
   #modalEditFedAuditor .modal-body { max-height: calc(100vh - 200px); overflow-y: auto; }
   .table td { vertical-align: top; }
+
+  /* Summernote dialog di atas Bootstrap modal */
   .note-modal { z-index: 1065 !important; }
   .note-popover { z-index: 1065 !important; }
   .note-toolbar { z-index: 1065; }
@@ -486,8 +511,67 @@
 
 @push('scripts')
 <script src="https://cdn.jsdelivr.net/npm/summernote@0.8.20/dist/summernote-lite.min.js"></script>
+
 <script>
-  // Custom AlphaListButton for a, b, c list
+  function safeHtml(html) {
+    return html && String(html).trim() !== '' ? html : '<span class="text-muted">-</span>';
+  }
+
+  function b64decode(str) {
+    if (!str) return '';
+    try { return atob(str); } catch (e) { return ''; }
+  }
+
+  function b64jsonDecode(str) {
+    if (!str) return [];
+    try { return JSON.parse(atob(str)); } catch (e) { return []; }
+  }
+
+  function normalizeUrl(url) {
+    url = (url || '').trim();
+    if (!url) return '';
+    if (/^https?:\/\//i.test(url)) return url;
+    return 'https://' + url;
+  }
+
+  function isProbablyUrl(url) {
+    url = (url || '').trim();
+    if (!url) return true; // allow kosong kalau rules backend ngebolehin
+    try { new URL(normalizeUrl(url)); return true; } catch(e) { return false; }
+  }
+
+  // Auto-close collapse detail saat buka detail lain
+  document.addEventListener('show.bs.collapse', function (e) {
+    const target = e.target;
+    if (!target.id || !target.id.startsWith('fedDetail_')) return;
+    document.querySelectorAll('.collapse[id^="fedDetail_"]').forEach(el => {
+      if (el !== target) {
+        const bs = bootstrap.Collapse.getInstance(el);
+        if (bs) bs.hide();
+      }
+    });
+  });
+
+  // ===== Modal indikator (HTML asli) =====
+  (function () {
+    const modal = document.getElementById('modalDesc');
+    if (!modal) return;
+
+    modal.addEventListener('show.bs.modal', function (ev) {
+      const btn = ev.relatedTarget;
+      const title = btn?.getAttribute('data-title') || 'Indikator';
+      const b64   = btn?.getAttribute('data-desc-html') || '';
+      const titleEl = document.getElementById('modalDesc_title');
+      const bodyEl  = document.getElementById('modalDesc_body');
+
+      if (titleEl) titleEl.textContent = title;
+      if (!bodyEl) return;
+
+      bodyEl.innerHTML = safeHtml(b64decode(b64));
+    });
+  })();
+
+  // ===== Summernote =====
   const AlphaListButton = function (context) {
     const ui = $.summernote.ui;
     const button = ui.button({
@@ -526,68 +610,34 @@
     auditorSummernoteInit = true;
   }
 
-  function decodeHtmlEntities(str) {
-    const txt = document.createElement('textarea');
-    txt.innerHTML = str || '';
-    return txt.value;
-  }
-
-  // Auto-close collapse detail saat buka detail lain
-  document.addEventListener('show.bs.collapse', function (e) {
-    const target = e.target;
-    if (!target.id || !target.id.startsWith('fedDetail_')) return;
-    document.querySelectorAll('.collapse[id^="fedDetail_"]').forEach(el => {
-      if (el !== target) {
-        const bs = bootstrap.Collapse.getInstance(el);
-        if (bs) bs.hide();
-      }
-    });
-  });
-
-  // ===== Modal indikator (HTML asli: bullet/numbering muncul) =====
-  (function () {
-    const modal = document.getElementById('modalDesc');
-    if (!modal) return;
-
-    modal.addEventListener('show.bs.modal', function (ev) {
-      const btn = ev.relatedTarget;
-      const title = btn?.getAttribute('data-title') || 'Indikator';
-      const b64   = btn?.getAttribute('data-desc-html') || '';
-      const titleEl = document.getElementById('modalDesc_title');
-      const bodyEl  = document.getElementById('modalDesc_body');
-
-      if (titleEl) titleEl.textContent = title;
-      if (!bodyEl) return;
-
-      try { bodyEl.innerHTML = b64 ? atob(b64) : ''; }
-      catch (e) { bodyEl.textContent = ''; }
-    });
-  })();
-
   // ===== Modal Edit FED Auditor =====
   (function () {
     const modalEdit = document.getElementById('modalEditFedAuditor');
     const formEdit  = document.getElementById('formEditFedAuditor');
     if (!modalEdit || !formEdit) return;
 
-    initAuditorSummernote();
+    const buktiInput = document.getElementById('modal_auditor_bukti_url');
 
     modalEdit.addEventListener('show.bs.modal', function (ev) {
       const btn = ev.relatedTarget;
       if (!btn) return;
 
+      initAuditorSummernote();
+
       const updateUrl    = btn.getAttribute('data-update-url') || '';
       const ketercapaian = btn.getAttribute('data-ketercapaian') || '';
-      const hasil        = btn.getAttribute('data-hasil') || '';
-      const faktor       = btn.getAttribute('data-faktor') || '';
-      const posTemplate  = btn.getAttribute('data-pos-template') || '';
-      const negTemplate  = btn.getAttribute('data-neg-template') || '';
+      const hasilB64     = btn.getAttribute('data-hasil-b64') || '';
+      const faktorB64    = btn.getAttribute('data-faktor-b64') || '';
+      const buktiUrlB64  = btn.getAttribute('data-bukti-url-b64') || '';
+      const posTplB64    = btn.getAttribute('data-pos-template') || '';
+      const negTplB64    = btn.getAttribute('data-neg-template') || '';
 
       formEdit.action = updateUrl;
 
-      modalEdit.dataset.posTemplate = posTemplate;
-      modalEdit.dataset.negTemplate = negTemplate;
+      modalEdit.dataset.posTemplate = b64decode(posTplB64);
+      modalEdit.dataset.negTemplate = b64decode(negTplB64);
 
+      // reset radio
       const radios = modalEdit.querySelectorAll('input[name="ketercapaian_standard_id"]');
       radios.forEach(r => r.checked = false);
       if (ketercapaian) {
@@ -596,8 +646,13 @@
       }
 
       setTimeout(function () {
-        $('#modal_auditor_hasil').summernote('code', decodeHtmlEntities(hasil));
-        $('#modal_auditor_faktor').summernote('code', decodeHtmlEntities(faktor));
+        $('#modal_auditor_hasil').summernote('code', b64decode(hasilB64));
+        $('#modal_auditor_faktor').summernote('code', b64decode(faktorB64));
+
+        if (buktiInput) {
+          buktiInput.value = b64decode(buktiUrlB64);
+          buktiInput.classList.remove('is-invalid');
+        }
       }, 80);
     });
 
@@ -606,6 +661,10 @@
       if (auditorSummernoteInit) {
         $('#modal_auditor_hasil').summernote('code', '');
         $('#modal_auditor_faktor').summernote('code', '');
+      }
+      if (buktiInput) {
+        buktiInput.value = '';
+        buktiInput.classList.remove('is-invalid');
       }
     });
 
@@ -618,117 +677,144 @@
       if (type === 'pos') tpl = modalEdit.dataset.posTemplate || '';
       else if (type === 'neg') tpl = modalEdit.dataset.negTemplate || '';
 
-      if (tpl) {
-        $('#modal_auditor_hasil').summernote('code', tpl);
-      }
+      if (tpl) $('#modal_auditor_hasil').summernote('code', tpl);
     });
+
+    formEdit.addEventListener('submit', function(e) {
+      if (!buktiInput) return;
+
+      const val = buktiInput.value || '';
+      if (!isProbablyUrl(val)) {
+        e.preventDefault();
+        buktiInput.classList.add('is-invalid');
+        buktiInput.focus();
+        return;
+      }
+
+      buktiInput.value = normalizeUrl(val);
+      buktiInput.classList.remove('is-invalid');
+    });
+
+    if (buktiInput) {
+      buktiInput.addEventListener('input', function() {
+        buktiInput.classList.remove('is-invalid');
+      });
+    }
   })();
 
-  // ===== Modal Checklist (ONCE, read-only jika sudah ada) =====
+  // ===== Modal Checklist (EDITABLE) =====
   (function () {
     const modal = document.getElementById('modalChecklist');
     const form  = document.getElementById('formChecklist');
     const rows  = document.getElementById('checklistRows');
     const addBtn= document.getElementById('btnAddChecklistRow');
     const hint  = document.getElementById('checklistHint');
-    const saveBtn = document.getElementById('btnSaveChecklist');
 
-    const existingWrap = document.getElementById('checklistExistingWrap');
-    const existingBody = document.getElementById('checklistExistingBody');
-    const inputWrap = document.getElementById('checklistInputWrap');
+    if (!modal || !form || !rows || !addBtn || !hint) return;
 
-    let rowIndex = 0; // unik, tidak reindex
+    let rowIndex = 0;
 
-    function rowTemplate(idx) {
+    function esc(str) {
+      return (str ?? '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+    }
+
+    function rowTemplate(idx, data = {}) {
+      const id   = data.id || '';
+      const item = data.item || '';
+      const note = data.note || '';
+
       return `
         <div class="border rounded p-2" data-index="${idx}">
           <div class="d-flex gap-2 align-items-start">
             <div class="flex-fill">
+              <input type="hidden" name="items[${idx}][id]" value="${esc(id)}">
+              <input type="hidden" name="items[${idx}][delete]" value="0">
+
+              <label class="form-label fw-semibold mb-1">Item</label>
               <input class="form-control form-control-sm"
                 name="items[${idx}][item]"
+                value="${esc(item)}"
                 placeholder="Item yang dicek (wajib)" required>
-              <textarea class="form-control form-control-sm mt-2"
+
+              <label class="form-label fw-semibold mt-2 mb-1">Catatan (opsional)</label>
+              <textarea class="form-control form-control-sm"
                 name="items[${idx}][note]" rows="2"
-                placeholder="Catatan (opsional)"></textarea>
+                placeholder="Catatan">${esc(note)}</textarea>
             </div>
-            <button type="button" class="btn btn-sm btn-outline-danger btnRemoveRow">
-              Hapus
-            </button>
+
+            <div class="d-flex flex-column gap-2">
+              <button type="button" class="btn btn-sm btn-outline-danger btnRemoveRow">
+                <i class="ph-trash me-1"></i> Hapus
+              </button>
+            </div>
           </div>
         </div>
       `;
     }
 
-    function addRow() {
+    function addRow(data = {}) {
       const idx = rowIndex++;
-      const wrapper = document.createElement('div');
-      wrapper.innerHTML = rowTemplate(idx);
-      const node = wrapper.firstElementChild;
+      const wrap = document.createElement('div');
+      wrap.innerHTML = rowTemplate(idx, data);
+
+      const node = wrap.firstElementChild;
+      const btnRemove = node.querySelector('.btnRemoveRow');
+
+      btnRemove.addEventListener('click', () => {
+        const idInput  = node.querySelector(`input[name="items[${idx}][id]"]`);
+        const delInput = node.querySelector(`input[name="items[${idx}][delete]"]`);
+        const itemInp  = node.querySelector(`input[name="items[${idx}][item]"]`);
+        const noteInp  = node.querySelector(`textarea[name="items[${idx}][note]"]`);
+
+        if (idInput && idInput.value) {
+          delInput.value = "1";
+          node.style.opacity = "0.5";
+          itemInp.disabled = true;
+          noteInp.disabled = true;
+          btnRemove.disabled = true;
+          btnRemove.textContent = "Ditandai hapus";
+        } else {
+          node.remove();
+        }
+      });
+
       rows.appendChild(node);
-      node.querySelector('.btnRemoveRow').addEventListener('click', () => node.remove());
     }
 
-    function resetRows() {
+    function resetRows(list = []) {
       rows.innerHTML = '';
       rowIndex = 0;
-      addRow();
+      if (list.length) list.forEach(x => addRow(x));
+      else addRow();
     }
 
-    modal?.addEventListener('show.bs.modal', function (ev) {
+    modal.addEventListener('show.bs.modal', function (ev) {
       const btn = ev.relatedTarget;
       if (!btn) return;
 
-      const hasChecklist = btn.getAttribute('data-has-checklist') === '1';
-      const existingB64  = btn.getAttribute('data-existing-b64') || '';
-      const action        = btn.getAttribute('data-action') || '';
+      form.action = btn.getAttribute('data-action') || '';
 
-      form.action = action;
+      const existingB64 = btn.getAttribute('data-existing-json-b64') || '';
+      const list = b64jsonDecode(existingB64);
 
-      if (hasChecklist) {
-        hint.classList.remove('alert-info');
-        hint.classList.add('alert-warning');
-        hint.textContent = 'Daftar tilik sudah dibuat. Tidak bisa diubah.';
+      hint.classList.remove('alert-warning','alert-danger');
+      hint.classList.add('alert-info');
+      hint.innerHTML = `Buat/ubah daftar tilik. Hanya bisa saat status indikator <b>Ditolak</b>.`;
 
-        try { existingBody.innerHTML = existingB64 ? atob(existingB64) : ''; }
-        catch (e) { existingBody.innerHTML = ''; }
-
-        existingWrap.classList.remove('d-none');
-        inputWrap.classList.add('d-none');
-
-        addBtn.disabled = true;
-        saveBtn.disabled = true;
-
-        rows.innerHTML = '';
-      } else {
-        hint.classList.remove('alert-warning');
-        hint.classList.add('alert-info');
-        hint.textContent = 'Buat daftar tilik sekaligus. Setelah disimpan, tidak bisa diubah.';
-
-        existingBody.innerHTML = '';
-        existingWrap.classList.add('d-none');
-        inputWrap.classList.remove('d-none');
-
-        addBtn.disabled = false;
-        saveBtn.disabled = false;
-
-        resetRows();
-      }
+      resetRows(list);
     });
 
-    modal?.addEventListener('hidden.bs.modal', function () {
+    modal.addEventListener('hidden.bs.modal', function () {
       form.action = '';
-      existingBody.innerHTML = '';
-      existingWrap.classList.add('d-none');
-      inputWrap.classList.remove('d-none');
-      addBtn.disabled = false;
-      saveBtn.disabled = false;
-      resetRows();
+      resetRows([]);
     });
 
-    addBtn?.addEventListener('click', addRow);
-
-    // default 1 row
-    resetRows();
+    addBtn.addEventListener('click', () => addRow());
   })();
 </script>
 @endpush

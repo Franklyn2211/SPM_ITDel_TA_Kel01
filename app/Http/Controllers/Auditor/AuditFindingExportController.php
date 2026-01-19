@@ -8,17 +8,20 @@ use App\Models\AuditFinding;
 use App\Models\AuditFindingForm;
 use App\Models\SelfEvaluationForm;
 use App\Models\UserRole;
+use ConvertApi\ConvertApi;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
-use Symfony\Component\HttpFoundation\BinaryFileResponse;
-use PhpOffice\PhpWord\TemplateProcessor;
 use PhpOffice\PhpWord\Element\TextRun;
-use ConvertApi\ConvertApi;
+use PhpOffice\PhpWord\TemplateProcessor;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class AuditFindingExportController extends Controller
 {
     private const TEMPLATE_PATH_F220 = 'templates/F-220_Formulir_Temuan_Rencana_Tindak_Lanjut.docx';
-    private const FORM_STATUS_FINAL = 'Final';
+    private const FORM_STATUS_FINAL  = 'Final';
+
+    // === ganti kalau kolom bukti lu beda ===
+    private const EVIDENCE_URL_COLUMN = 'supporting_evidence_url';
 
     /* ================= Access Helpers ================= */
 
@@ -26,6 +29,8 @@ class AuditFindingExportController extends Controller
     {
         $u = auth()->user();
         if (!$u) return null;
+
+        if (method_exists($u, 'userRole') && $u->userRole) return $u->userRole;
 
         if (!empty($u->user_role_id)) return UserRole::find($u->user_role_id);
 
@@ -48,19 +53,51 @@ class AuditFindingExportController extends Controller
         return (bool) $u && $u->username === 'adminspm';
     }
 
+    private function normalizeName(string $name): string
+    {
+        $name = mb_strtolower(trim($name));
+        $name = preg_replace('/[^\p{L}\p{N}\s]+/u', ' ', $name);
+        $name = preg_replace('/\s+/u', ' ', $name);
+        return trim($name);
+    }
+
     private function ensureUserCanAccessForm(AuditFindingForm $form): void
     {
         if ($this->isAdmin()) return;
 
         $myRoleId = $this->currentUserRoleId();
-        abort_unless($myRoleId, 403, 'User role tidak ditemukan.');
+        if ($myRoleId) {
+            if (in_array($myRoleId, [$form->auditor_user_role_id, $form->member_auditor_user_role_id], true)) {
+                return;
+            }
+        }
 
-        $allowed = in_array($myRoleId, [
-            $form->auditor_user_role_id,
-            $form->member_auditor_user_role_id,
-        ], true);
+        $user = auth()->user();
+        abort_unless($user, 403, 'User belum login.');
 
-        abort_unless($allowed, 403, 'Tidak berhak mengakses form temuan ini.');
+        $fed = SelfEvaluationForm::findOrFail($form->self_evaluation_form_id);
+
+        if (!empty($fed->head_auditee_user_id) && (string) $fed->head_auditee_user_id === (string) $user->id) {
+            return;
+        }
+
+        $myName   = $this->normalizeName((string) ($user->name ?? ''));
+        $headName = $this->normalizeName((string) ($fed->head_auditee_name ?? ''));
+
+        if ($headName !== '' && $myName !== '' && $myName === $headName) {
+            return;
+        }
+
+        $myUserId = (string) $user->id;
+        $memberIds = array_filter([
+            $fed->member_auditee_1_user_id ?? null,
+            $fed->member_auditee_2_user_id ?? null,
+            $fed->member_auditee_3_user_id ?? null,
+        ], fn ($v) => !is_null($v) && (string) $v !== '');
+
+        $memberIds = array_map('strval', $memberIds);
+
+        abort_unless(in_array($myUserId, $memberIds, true), 403, 'Tidak berhak mengakses dokumen temuan ini.');
     }
 
     /* ================= Formatting Helpers ================= */
@@ -77,15 +114,18 @@ class AuditFindingExportController extends Controller
         return $text === '' ? $fallback : $text;
     }
 
+    /**
+     * HTML summernote -> TextRun (udah support <a> jadi hyperlink)
+     */
     private function parseHtmlToTextRun(TextRun $run, ?string $html): void
     {
         $html = $html ?? '';
         if (trim($html) === '') return;
 
         $dom = new \DOMDocument();
-        $htmlEnc = mb_convert_encoding($html, 'HTML-ENTITIES', 'UTF-8');
+        $html = mb_convert_encoding($html, 'HTML-ENTITIES', 'UTF-8');
         libxml_use_internal_errors(true);
-        $dom->loadHTML("<div>{$htmlEnc}</div>", LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD);
+        $dom->loadHTML("<div>{$html}</div>", LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD);
         libxml_clear_errors();
 
         $container = $dom->getElementsByTagName('div')->item(0);
@@ -96,8 +136,8 @@ class AuditFindingExportController extends Controller
 
         $traverse = function ($node, $style = [], $listContext = []) use (&$traverse, $run) {
             if ($node->nodeType === XML_TEXT_NODE) {
-                $t = $node->textContent;
-                if ($t !== '') $run->addText($t, $style);
+                $text = $node->textContent;
+                if ($text !== '') $run->addText($text, $style);
                 return;
             }
             if ($node->nodeType !== XML_ELEMENT_NODE) return;
@@ -111,7 +151,11 @@ class AuditFindingExportController extends Controller
             if ($tag === 'p' || $tag === 'div') {
                 if ($node->previousSibling) $run->addTextBreak();
             }
-            if ($tag === 'br') { $run->addTextBreak(); return; }
+
+            if ($tag === 'br') {
+                $run->addTextBreak();
+                return;
+            }
 
             if ($tag === 'ul' || $tag === 'ol') {
                 $idx = 1;
@@ -133,13 +177,15 @@ class AuditFindingExportController extends Controller
 
                 $marker = '• ';
                 if ($lType !== 'ul') {
-                    $marker = "{$idx}. ";
+                    if ($lType === 'a') $marker = chr(96 + (($idx - 1) % 26 + 1)) . '. ';
+                    elseif ($lType === 'A') $marker = chr(64 + (($idx - 1) % 26 + 1)) . '. ';
+                    else $marker = "{$idx}. ";
                 }
 
                 $run->addTextBreak();
                 $nbsp = "\xC2\xA0";
-                $indent = str_repeat($nbsp . $nbsp . $nbsp, $depth);
-                $run->addText($indent . $marker, $style);
+                $indentStr = str_repeat($nbsp . $nbsp . $nbsp, $depth);
+                $run->addText($indentStr . $marker, $style);
 
                 foreach ($node->childNodes as $child) $traverse($child, $style, $listContext);
                 return;
@@ -161,6 +207,19 @@ class AuditFindingExportController extends Controller
         $traverse($container);
     }
 
+    private function addEvidenceUrlToRun(TextRun $run, ?string $url): void
+    {
+        $url = trim((string)($url ?? ''));
+        if ($url === '') return;
+
+        // normalize
+        if (!preg_match('~^https?://~i', $url)) $url = 'https://' . $url;
+
+        $run->addTextBreak();
+        $run->addText('Bukti: ', ['bold' => true]);
+        $run->addLink($url, $url, ['color' => '0000FF', 'underline' => 'single']);
+    }
+
     private function safeFilename(string $name): string
     {
         $name = preg_replace('/[\\\\\\/:*?"<>|]+/', '', $name);
@@ -173,13 +232,9 @@ class AuditFindingExportController extends Controller
         $raw = trim((string) ($ac->academic_code ?? $ac->name ?? ''));
 
         if (preg_match('/(20\d{2})\s*\/\s*(20\d{2})/', $raw, $m)) {
-            return substr($m[1], 2, 2) . substr($m[2], 2, 2); // 2324
+            return substr($m[1], 2, 2) . substr($m[2], 2, 2);
         }
-
-        if (preg_match('/\b(\d{4})\b/', $raw, $m)) {
-            return $m[1];
-        }
-
+        if (preg_match('/\b(\d{4})\b/', $raw, $m)) return $m[1];
         return '0000';
     }
 
@@ -210,26 +265,17 @@ class AuditFindingExportController extends Controller
     private function unitCodeFromFed(SelfEvaluationForm $fed, AuditFindingForm $form): string
     {
         $code = strtoupper(trim((string) optional($fed->categoryDetail)->code));
-        if ($code === '') {
-            $code = strtoupper(trim((string) ($form->area ?? '')));
-        }
+        if ($code === '') $code = strtoupper(trim((string) ($form->area ?? '')));
         return $code !== '' ? $code : 'UNIT';
     }
 
     private function userRoleName(?string $userRoleId): string
     {
         if (!$userRoleId) return '';
-
-        // Asumsi: UserRole punya relasi `user`
         $ur = UserRole::with('user')->find($userRoleId);
         if (!$ur) return '';
-
         $name = trim((string) optional($ur->user)->name);
-        if ($name !== '') return $name;
-
-        // fallback kalau struktur user kamu beda
-        $fallback = trim((string) ($ur->name ?? $ur->username ?? ''));
-        return $fallback;
+        return $name !== '' ? $name : trim((string) ($ur->name ?? $ur->username ?? ''));
     }
 
     /* ================= Export PDF ================= */
@@ -243,11 +289,9 @@ class AuditFindingExportController extends Controller
         abort_unless(!empty($convertApiSecret), 500, 'CONVERTAPI_SECRET belum dikonfigurasi.');
         abort_unless(class_exists(\ZipArchive::class), 500, 'PHP Zip extension belum aktif.');
 
-        // ambil FED + relasi penting
         $fed = SelfEvaluationForm::with(['academicConfig', 'categoryDetail'])
             ->findOrFail($form->self_evaluation_form_id);
 
-        // ambil row temuan
         $rows = AuditFinding::with([
                 'selfEvaluationDetail.standardAchievement',
                 'selfEvaluationDetail.indicator.standard',
@@ -257,23 +301,20 @@ class AuditFindingExportController extends Controller
             ->orderBy('finding_no')
             ->get();
 
-        $rowsPos = $rows->filter(fn($r) => !$this->isNegative($r))->values();
-        $rowsNeg = $rows->filter(fn($r) =>  $this->isNegative($r))->values();
+        $rowsPos = $rows->filter(fn ($r) => !$this->isNegative($r))->values();
+        $rowsNeg = $rows->filter(fn ($r) =>  $this->isNegative($r))->values();
 
-        // template
         $templateAbsPath = storage_path('app/' . self::TEMPLATE_PATH_F220);
         abort_unless(is_file($templateAbsPath), 500, 'Template DOCX F-220 tidak ditemukan: ' . self::TEMPLATE_PATH_F220);
 
         $tp = new TemplateProcessor($templateAbsPath);
 
-        // header data
         $unitName  = optional($fed->categoryDetail)->name ?? ($form->area ?? '');
         $acadShort = $this->academicShort($fed->academicConfig);
         $unitCode  = $this->unitCodeFromFed($fed, $form);
 
-        // Nama auditor (dari user_roles -> user -> name)
-        $ketuaAuditee  = trim((string) ($fed->head_auditee_name ?? ''));
-        $ketuaAuditor  = $this->userRoleName($form->auditor_user_role_id);
+        $ketuaAuditee   = trim((string) ($fed->head_auditee_name ?? ''));
+        $ketuaAuditor   = $this->userRoleName($form->auditor_user_role_id);
         $anggotaAuditor = $this->userRoleName($form->member_auditor_user_role_id);
 
         $tp->setValue('area', $unitName);
@@ -286,21 +327,25 @@ class AuditFindingExportController extends Controller
         $tp->setValue('nama_ketua_auditee', $ketuaAuditee);
         $tp->setValue('nama_ketua_auditor', $ketuaAuditor);
 
-        /* ===== POSITIF (cloneRow p_no) ===== */
+        $evidenceCol = self::EVIDENCE_URL_COLUMN;
+
+        /* ================= POSITIF ================= */
         $pRows = [];
-        $pStandarBlocks = [];
-        $pDeskripsiBlocks = [];
+        $pStandarBlocks      = [];
+        $pDeskripsiBlocks    = [];
+        $pFaktorBlocks       = [];
+        $pPengendalianBlocks = [];
+        $pPeningkatanBlocks  = [];
+        $pRencanaBlocks      = [];
 
         foreach ($rowsPos as $idx => $r) {
             $i = $idx + 1;
 
-            $detail = $r->selfEvaluationDetail;
+            $detail    = $r->selfEvaluationDetail;
             $indicator = $detail?->indicator;
-            $standard = $indicator?->standard;
+            $standard  = $indicator?->standard;
 
-            // POSITIF: numbering reset mulai 001
             $noTemuan = $this->formatNoTemuan('TP', $unitCode, $acadShort, $i);
-
             $ach = mb_strtolower(trim((string) optional($detail?->standardAchievement)->name));
 
             $stdRun = new TextRun();
@@ -312,20 +357,34 @@ class AuditFindingExportController extends Controller
             $this->parseHtmlToTextRun($stdRun, $indicator?->description ?? '');
             $pStandarBlocks[$i] = $stdRun;
 
+            // ===== Deskripsi kondisi (FED) + BUKTI URL jadi hyperlink =====
             $descRun = new TextRun();
             $this->parseHtmlToTextRun($descRun, $detail?->result ?? '');
+            $this->addEvidenceUrlToRun($descRun, $detail?->{$evidenceCol} ?? null);
             $pDeskripsiBlocks[$i] = $descRun;
 
+            $fakRun = new TextRun();
+            $this->parseHtmlToTextRun($fakRun, $detail?->contributing_factors ?? '');
+            $pFaktorBlocks[$i] = $fakRun;
+
+            $pengRun = new TextRun();
+            $this->parseHtmlToTextRun($pengRun, $r->control ?? '');
+            $pPengendalianBlocks[$i] = $pengRun;
+
+            $peningRun = new TextRun();
+            $this->parseHtmlToTextRun($peningRun, $r->improvement ?? '');
+            $pPeningkatanBlocks[$i] = $peningRun;
+
+            $rencanaRun = new TextRun();
+            $this->parseHtmlToTextRun($rencanaRun, $r->follow_up_plan ?? '');
+            $pRencanaBlocks[$i] = $rencanaRun;
+
             $pRows[] = [
-                'p_no' => (string) $i,
-                'p_no_temuan' => $noTemuan,
-                'p_mencapai' => $ach === 'mencapai' ? '✓' : '',
-                'p_melampaui' => $ach === 'melampaui' ? '✓' : '',
-                'p_faktor' => $this->cleanText($detail?->contributing_factors, ''),
-                'p_pengendalian' => $this->cleanText($r->control, ''),
-                'p_peningkatan' => $this->cleanText($r->improvement, ''),
-                'p_rencana' => $this->cleanText($r->follow_up_plan, ''),
-                'p_jadwal' => $r->due_date ? \Carbon\Carbon::parse($r->due_date)->format('d/m/Y') : '',
+                'p_no'               => (string) $i,
+                'p_no_temuan'        => $noTemuan,
+                'p_mencapai'         => $ach === 'mencapai' ? '✓' : '',
+                'p_melampaui'        => $ach === 'melampaui' ? '✓' : '',
+                'p_jadwal'           => $r->due_date ? \Carbon\Carbon::parse($r->due_date)->format('d/m/Y') : '',
                 'p_penanggung_jawab' => $this->cleanText($this->picRoleNames($indicator?->id), ''),
             ];
         }
@@ -336,10 +395,6 @@ class AuditFindingExportController extends Controller
                 'p_no_temuan' => '',
                 'p_mencapai' => '',
                 'p_melampaui' => '',
-                'p_faktor' => '',
-                'p_pengendalian' => '',
-                'p_peningkatan' => '',
-                'p_rencana' => '',
                 'p_jadwal' => '',
                 'p_penanggung_jawab' => '',
             ];
@@ -349,25 +404,30 @@ class AuditFindingExportController extends Controller
 
         foreach ($pRows as $idx => $_) {
             $i = $idx + 1;
-            if (isset($pStandarBlocks[$i])) $tp->setComplexBlock("p_standar#{$i}", $pStandarBlocks[$i]);
-            if (isset($pDeskripsiBlocks[$i])) $tp->setComplexBlock("p_deskripsi#{$i}", $pDeskripsiBlocks[$i]);
+            try { $tp->setComplexBlock("p_standar#{$i}", $pStandarBlocks[$i] ?? new TextRun()); } catch (\Throwable $e) {}
+            try { $tp->setComplexBlock("p_deskripsi#{$i}", $pDeskripsiBlocks[$i] ?? new TextRun()); } catch (\Throwable $e) {}
+            try { $tp->setComplexBlock("p_faktor#{$i}", $pFaktorBlocks[$i] ?? new TextRun()); } catch (\Throwable $e) {}
+            try { $tp->setComplexBlock("p_pengendalian#{$i}", $pPengendalianBlocks[$i] ?? new TextRun()); } catch (\Throwable $e) {}
+            try { $tp->setComplexBlock("p_peningkatan#{$i}", $pPeningkatanBlocks[$i] ?? new TextRun()); } catch (\Throwable $e) {}
+            try { $tp->setComplexBlock("p_rencana#{$i}", $pRencanaBlocks[$i] ?? new TextRun()); } catch (\Throwable $e) {}
         }
 
-        /* ===== NEGATIF (cloneRow n_no) ===== */
+        /* ================= NEGATIF ================= */
         $nRows = [];
-        $nStandarBlocks = [];
-        $nDeskripsiBlocks = [];
+        $nStandarBlocks        = [];
+        $nDeskripsiBlocks      = [];
+        $nFaktorBlocks         = [];
+        $nRekomendasiBlocks    = [];
+        $nRencanaKoreksiBlocks = [];
 
         foreach ($rowsNeg as $idx => $r) {
             $i = $idx + 1;
 
-            $detail = $r->selfEvaluationDetail;
+            $detail    = $r->selfEvaluationDetail;
             $indicator = $detail?->indicator;
-            $standard = $indicator?->standard;
+            $standard  = $indicator?->standard;
 
-            // NEGATIF: numbering reset mulai 001
             $noTemuan = $this->formatNoTemuan('TN', $unitCode, $acadShort, $i);
-
             $sev = strtolower(trim((string) $r->severity));
 
             $stdRun = new TextRun();
@@ -379,20 +439,31 @@ class AuditFindingExportController extends Controller
             $this->parseHtmlToTextRun($stdRun, $indicator?->description ?? '');
             $nStandarBlocks[$i] = $stdRun;
 
+            // ===== Deskripsi kondisi (FED) + BUKTI URL jadi hyperlink =====
             $descRun = new TextRun();
             $this->parseHtmlToTextRun($descRun, $detail?->result ?? '');
+            $this->addEvidenceUrlToRun($descRun, $detail?->{$evidenceCol} ?? null);
             $nDeskripsiBlocks[$i] = $descRun;
 
+            $fakRun = new TextRun();
+            $this->parseHtmlToTextRun($fakRun, $detail?->contributing_factors ?? '');
+            $nFaktorBlocks[$i] = $fakRun;
+
+            $rekRun = new TextRun();
+            $this->parseHtmlToTextRun($rekRun, $r->auditor_recommendation ?? '');
+            $nRekomendasiBlocks[$i] = $rekRun;
+
+            $korRun = new TextRun();
+            $this->parseHtmlToTextRun($korRun, $r->corrective_action_plan ?? '');
+            $nRencanaKoreksiBlocks[$i] = $korRun;
+
             $nRows[] = [
-                'n_no' => (string) $i,
-                'n_no_temuan' => $noTemuan,
-                'n_obs' => in_array($sev, ['obs', 'observasi'], true) ? '✓' : '',
-                'n_kts_minor' => in_array($sev, ['kts minor', 'kts_minor', 'minor'], true) ? '✓' : '',
-                'n_kts_mayor' => in_array($sev, ['kts mayor', 'kts_mayor', 'mayor'], true) ? '✓' : '',
-                'n_faktor' => $this->cleanText($detail?->contributing_factors, ''),
-                'n_rekomendasi' => $this->cleanText($r->auditor_recommendation, ''),
-                'n_rencana_koreksi' => $this->cleanText($r->corrective_action_plan, ''),
-                'n_jadwal' => $r->due_date ? \Carbon\Carbon::parse($r->due_date)->format('d/m/Y') : '',
+                'n_no'               => (string) $i,
+                'n_no_temuan'        => $noTemuan,
+                'n_obs'              => in_array($sev, ['obs', 'observasi'], true) ? '✓' : '',
+                'n_kts_minor'        => in_array($sev, ['kts minor', 'kts_minor', 'minor'], true) ? '✓' : '',
+                'n_kts_mayor'        => in_array($sev, ['kts mayor', 'kts_mayor', 'mayor'], true) ? '✓' : '',
+                'n_jadwal'           => $r->due_date ? \Carbon\Carbon::parse($r->due_date)->format('d/m/Y') : '',
                 'n_penanggung_jawab' => $this->cleanText($this->picRoleNames($indicator?->id), ''),
             ];
         }
@@ -404,9 +475,6 @@ class AuditFindingExportController extends Controller
                 'n_obs' => '',
                 'n_kts_minor' => '',
                 'n_kts_mayor' => '',
-                'n_faktor' => '',
-                'n_rekomendasi' => '',
-                'n_rencana_koreksi' => '',
                 'n_jadwal' => '',
                 'n_penanggung_jawab' => '',
             ];
@@ -416,16 +484,18 @@ class AuditFindingExportController extends Controller
 
         foreach ($nRows as $idx => $_) {
             $i = $idx + 1;
-            if (isset($nStandarBlocks[$i])) $tp->setComplexBlock("n_standar#{$i}", $nStandarBlocks[$i]);
-            if (isset($nDeskripsiBlocks[$i])) $tp->setComplexBlock("n_deskripsi#{$i}", $nDeskripsiBlocks[$i]);
+            try { $tp->setComplexBlock("n_standar#{$i}", $nStandarBlocks[$i] ?? new TextRun()); } catch (\Throwable $e) {}
+            try { $tp->setComplexBlock("n_deskripsi#{$i}", $nDeskripsiBlocks[$i] ?? new TextRun()); } catch (\Throwable $e) {}
+            try { $tp->setComplexBlock("n_faktor#{$i}", $nFaktorBlocks[$i] ?? new TextRun()); } catch (\Throwable $e) {}
+            try { $tp->setComplexBlock("n_rekomendasi#{$i}", $nRekomendasiBlocks[$i] ?? new TextRun()); } catch (\Throwable $e) {}
+            try { $tp->setComplexBlock("n_rencana_koreksi#{$i}", $nRencanaKoreksiBlocks[$i] ?? new TextRun()); } catch (\Throwable $e) {}
         }
 
-        /* ===== SAVE DOCX TEMP ===== */
+        /* ================= SAVE DOCX TEMP ================= */
         $tmpDir = storage_path('app/tmp');
         if (!is_dir($tmpDir)) @mkdir($tmpDir, 0775, true);
 
         $safeUnit = $this->safeFilename($unitName ?: 'Unit');
-
         $docxFilename = "F-220_Temuan_{$safeUnit}.docx";
         $pdfFilename  = "F-220_Temuan_{$safeUnit}.pdf";
 
@@ -437,7 +507,7 @@ class AuditFindingExportController extends Controller
 
         $tp->saveAs($docxPath);
 
-        /* ===== CONVERT DOCX -> PDF ===== */
+        /* ================= CONVERT DOCX -> PDF ================= */
         try {
             ConvertApi::setApiCredentials($convertApiSecret);
 
@@ -450,17 +520,17 @@ class AuditFindingExportController extends Controller
             if (!file_exists($pdfPath)) {
                 $files = glob($tmpDir . '/*.pdf');
                 if (!empty($files)) {
-                    usort($files, fn($a, $b) => filemtime($b) - filemtime($a));
+                    usort($files, fn ($a, $b) => filemtime($b) - filemtime($a));
                     $found = $files[0];
                     if ($found !== $pdfPath) rename($found, $pdfPath);
                 }
             }
 
             if (file_exists($docxPath)) @unlink($docxPath);
-
             abort_unless(file_exists($pdfPath), 500, 'Gagal mengkonversi dokumen ke PDF.');
 
             return response()->download($pdfPath, $pdfFilename)->deleteFileAfterSend(true);
+
         } catch (\Throwable $e) {
             if (file_exists($docxPath)) @unlink($docxPath);
             if (file_exists($pdfPath))  @unlink($pdfPath);

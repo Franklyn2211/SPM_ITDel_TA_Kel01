@@ -7,18 +7,18 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration {
     public function up(): void
     {
-        Schema::create('audit_finding_forms', function (Blueprint $table) {
+        Schema::create('audit_follow_up_forms', function (Blueprint $table) {
             $table->string('id')->primary();
 
-            // Relasi ke FED
-            $table->string('self_evaluation_form_id');
+            // Relasi ke Form Temuan
+            $table->string('audit_finding_form_id');
 
-            // Snapshot header
-            $table->string('area', 255)->nullable();
+            // Snapshot
+            $table->string('area')->nullable();
             $table->date('audit_date')->nullable();
 
             // Auditor
-            $table->string('auditor_user_role_id')->nullable();   // Ketua auditor (ROLE)
+            $table->string('auditor_user_role_id')->nullable();        // Ketua auditor (ROLE)
             $table->string('member_auditor_user_role_id')->nullable(); // Anggota auditor (USER)
 
             // Status
@@ -31,11 +31,16 @@ return new class extends Migration {
             $table->timestamps();
             $table->boolean('active')->default(true);
 
+            /* ================= INDEX ================= */
+            $table->index('audit_finding_form_id');
+            $table->index('auditor_user_role_id');
+            $table->index('member_auditor_user_role_id');
+
             /* ================= FK ================= */
 
-            $table->foreign('self_evaluation_form_id')
+            $table->foreign('audit_finding_form_id')
                 ->references('id')
-                ->on('self_evaluation_forms')
+                ->on('audit_finding_forms')
                 ->cascadeOnDelete();
 
             // Ketua auditor → user_roles
@@ -44,28 +49,22 @@ return new class extends Migration {
                 ->on('user_roles')
                 ->nullOnDelete();
 
-            // Anggota auditor → users (PERSIS FED)
+            // Anggota auditor → users
             $table->foreign('member_auditor_user_role_id')
                 ->references('id')
                 ->on('user_roles')
                 ->nullOnDelete();
 
-            $table->foreign('created_by')
-                ->references('id')
-                ->on('user_roles')
-                ->nullOnDelete();
-
-            $table->foreign('updated_by')
-                ->references('id')
-                ->on('user_roles')
-                ->nullOnDelete();
-
-            $table->index('status', 'idx_finding_form_status');
+            // 1 ATL aktif per Form Temuan
+            $table->unique(
+                ['audit_finding_form_id', 'active'],
+                'uq_atl_form_per_finding_form_active'
+            );
         });
     }
 
     public function down(): void
     {
-        Schema::dropIfExists('audit_finding_forms');
+        Schema::dropIfExists('audit_follow_up_forms');
     }
 };

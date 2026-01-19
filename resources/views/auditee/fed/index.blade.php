@@ -224,7 +224,9 @@
             @forelse($details as $d)
               @php
                 $readOnly = in_array(($form->status->name ?? ''), ['Dikirim', 'Disetujui', 'Ditolak']);
-                $isFilled = !is_null($d->standard_achievement_id) || (isset($d->result) && trim($d->result) !== '');
+                $hasil = trim((string)($d->result ?? ''));
+                $bukti = trim((string)($d->supporting_evidence_url ?? ''));
+                $isFilled = !is_null($d->standard_achievement_id) && $hasil !== '' && $bukti !== '';
               @endphp
               <tr id="detail-{{ $d->id }}">
                 <td class="text-center align-top">{{ ($details->currentPage() - 1) * $details->perPage() + $loop->iteration }}</td>
@@ -258,6 +260,7 @@
                     data-update-url="{{ route('auditee.fed.updateDetail', [$form, $d]) }}"
                     data-ketercapaian="{{ $d->standard_achievement_id ?? '' }}"
                     data-hasil="{{ e($d->result ?? '') }}"
+                    data-bukti-url="{{ e($d->supporting_evidence_url ?? '') }}"
                     data-faktor="{{ e($d->contributing_factors ?? '') }}"
                     data-pos-template="{{ e($d->indicator->positive_result_template ?? '') }}"
                     data-neg-template="{{ e($d->indicator->negative_result_template ?? '') }}"
@@ -579,6 +582,19 @@
           <textarea name="hasil" id="modal_hasil" class="form-control summernote-fed"></textarea>
         </div>
 
+        {{-- Bukti Pendukung (URL) --}}
+        <div class="mb-4">
+            <label class="form-label fw-semibold">Bukti Pendukung (URL)</label>
+            <input type="url"
+                name="bukti_pendukung_url"
+                id="modal_bukti_url"
+                class="form-control"
+                placeholder="https://drive.google.com/..."
+                autocomplete="off">
+                <small class="text-muted">Masukkan link bukti (Drive/OneDrive/dll). Wajib saat submit.</small>
+        </div>
+
+
         {{-- Faktor Penghambat / Pendukung --}}
         <div class="mb-3">
           <label class="form-label fw-semibold">Faktor Penghambat / Pendukung</label>
@@ -698,6 +714,7 @@
   let summernoteInitialized = false;
   function initSummernote() {
     if (summernoteInitialized) return;
+
     $('.summernote-fed').summernote({
       height: 180,
       toolbar: [
@@ -718,6 +735,7 @@
       tabsize: 2,
       dialogsInBody: true
     });
+
     summernoteInitialized = true;
   }
 
@@ -726,6 +744,34 @@
     const txt = document.createElement('textarea');
     txt.innerHTML = html || '';
     return txt.value;
+  }
+
+  // helper: strip HTML -> plain text (buat template)
+  function stripHtmlToPlainText(html) {
+    const div = document.createElement('div');
+    div.innerHTML = html || '';
+    const text = (div.textContent || div.innerText || '').replace(/\s+\n/g, '\n');
+    return text.trim();
+  }
+
+  // helper: normalisasi url (add https:// kalau user ketik drive.google.com tanpa scheme)
+  function normalizeUrl(url) {
+    url = (url || '').trim();
+    if (!url) return '';
+    if (/^https?:\/\//i.test(url)) return url;
+    return 'https://' + url;
+  }
+
+  // helper: validasi url sederhana (frontend)
+  function isProbablyUrl(url) {
+    url = (url || '').trim();
+    if (!url) return true; // allow empty in draft mode (backend yang mutusin wajib/engga)
+    try {
+      new URL(normalizeUrl(url));
+      return true;
+    } catch (e) {
+      return false;
+    }
   }
 
   // MODAL ISI/EDIT FED: TANPA WIZARD, SATU FORM PENUH
@@ -737,6 +783,10 @@
     // inisialisasi Summernote sekali
     initSummernote();
 
+    const buktiInput = document.getElementById('modal_bukti_url'); // HARUS ADA di modal HTML
+    const hasilEl = $('#modal_hasil');
+    const faktorEl = $('#modal_faktor');
+
     modalEl.addEventListener('show.bs.modal', function(ev) {
       const btn = ev.relatedTarget;
       if (!btn) return;
@@ -744,7 +794,7 @@
       const updateUrl    = btn.getAttribute('data-update-url') || '';
       const ketercapaian = btn.getAttribute('data-ketercapaian') || '';
       const hasil        = btn.getAttribute('data-hasil') || '';
-      const bukti        = btn.getAttribute('data-bukti') || '';
+      const buktiUrl     = btn.getAttribute('data-bukti-url') || '';
       const faktor       = btn.getAttribute('data-faktor') || '';
       const posTemplate  = btn.getAttribute('data-pos-template') || '';
       const negTemplate  = btn.getAttribute('data-neg-template') || '';
@@ -765,63 +815,40 @@
         if (targetRadio) targetRadio.checked = true;
       }
 
-      // isi Summernote dengan data lama (HTML)
+      // isi field
       setTimeout(function() {
         const hasilHtml  = decodeHtml(hasil);
-        const buktiHtml  = decodeHtml(bukti);
         const faktorHtml = decodeHtml(faktor);
 
-        $('#modal_hasil').summernote('code', hasilHtml);
-        // Note: bukti and faktor inputs in the modal HTML might need checking if they exist as summernote instances
-        // Based on lines 581 in view file, #modal_faktor is .summernote-fed.
-        // But checking the view file content again, there is no #modal_bukti.
-        // Line 256 sends data-bukti.
-        // Line 602 in view: .note-editing-area { min-height: 150px; }
-        // Let's check the modal body again...
-        // Ah, looking at lines 573-582, I only see 'hasil' aka #modal_hasil and 'faktor_penghambat_pendukung' aka #modal_faktor.
-        // Wait, line 256 passes data-bukti, but is there an input for it?
-        // Lines 575 and 581 are the textareas. Where is bukti?
-        // Looking at previous view_file output...
-        // Line 575: textarea name="hasil" id="modal_hasil"
-        // Line 581: textarea name="faktor_penghambat_pendukung" id="modal_faktor"
-        // I don't see a field for 'bukti_pendukung'.
-        // However, the Javascript I'm replacing (lines 770/774) references `buktiPlain` and `#modal_bukti`.
-        // If `#modal_bukti` doesn't exist in DOM, jQuery won't crash, it just won't do anything.
-        // I will keep the logic safely but fix the decode.
+        hasilEl.summernote('code', hasilHtml);
+        faktorEl.summernote('code', faktorHtml);
 
-        // Checking lines 572-583 again:
-        // 573: <label... Hasil Pelaksanaan ...>
-        // 575: <textarea name="hasil" id="modal_hasil"...>
-        // 580: <label... Faktor ...>
-        // 581: <textarea name="faktor_penghambat_pendukung" id="modal_faktor"...>
-
-        // It seems 'bukti_pendukung' input is MISSING in the modal HTML if the javascript expects it!
-        // But for now, focusing on fixing the stripping issue.
-
-        $('#modal_faktor').summernote('code', faktorHtml);
-
-        // If #modal_bukti existed, we would do this:
-        if ($('#modal_bukti').length) {
-             $('#modal_bukti').summernote('code', buktiHtml);
+        if (buktiInput) {
+          buktiInput.value = decodeHtml(buktiUrl);
+          buktiInput.classList.remove('is-invalid');
         }
 
         $(modalEl).find('.modal-body').scrollTop(0);
-      }, 100);
+      }, 80);
     });
 
+    // reset saat modal ditutup
     modalEl.addEventListener('hidden.bs.modal', function() {
       formEl.reset();
       if (summernoteInitialized) {
-        $('#modal_hasil').summernote('code', '');
-        $('#modal_bukti').summernote('code', '');
-        $('#modal_faktor').summernote('code', '');
+        hasilEl.summernote('code', '');
+        faktorEl.summernote('code', '');
+      }
+      if (buktiInput) {
+        buktiInput.value = '';
+        buktiInput.classList.remove('is-invalid');
       }
     });
 
     // auto-isi hasil pelaksanaan ketika ketercapaian diubah (pakai template pos/neg)
     modalEl.addEventListener('change', function (ev) {
       const target = ev.target;
-      if (target.name === 'ketercapaian_standard_id') {
+      if (target && target.name === 'ketercapaian_standard_id') {
         const type = target.getAttribute('data-template-type');
         let tpl = '';
         if (type === 'pos') {
@@ -830,14 +857,39 @@
           tpl = modalEl.dataset.negTemplate || '';
         }
 
-        if (tpl) {
+        // isi hanya kalau masih kosong (biar gak nimpa tulisan user)
+        const current = stripHtmlToPlainText(hasilEl.summernote('code') || '');
+        if (tpl && current === '') {
           const plain = stripHtmlToPlainText(tpl);
-          $('#modal_hasil').summernote('code', $('<p/>').text(plain).html());
+          hasilEl.summernote('code', $('<p/>').text(plain).html());
         }
       }
     });
-  })();
 
+    // validasi ringan url bukti saat submit modal
+    formEl.addEventListener('submit', function(e) {
+      if (!buktiInput) return;
+
+      const val = buktiInput.value || '';
+      if (!isProbablyUrl(val)) {
+        e.preventDefault();
+        buktiInput.classList.add('is-invalid');
+        buktiInput.focus();
+        return;
+      }
+
+      // normalize biar konsisten (optional)
+      buktiInput.value = normalizeUrl(val);
+      buktiInput.classList.remove('is-invalid');
+    });
+
+    // remove invalid class saat user ngetik lagi
+    if (buktiInput) {
+      buktiInput.addEventListener('input', function() {
+        buktiInput.classList.remove('is-invalid');
+      });
+    }
+  })();
 
   // Modal Desc
   (function() {

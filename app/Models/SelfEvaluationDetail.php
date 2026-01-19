@@ -19,6 +19,7 @@ class SelfEvaluationDetail extends Model
         'standard_achievement_id',
         'status_id',
         'result',
+        'supporting_evidence_url',
         'contributing_factors',
         'created_by',
         'updated_by',
@@ -32,26 +33,15 @@ class SelfEvaluationDetail extends Model
     protected static function booted(): void
     {
         static::creating(function ($model) {
-            if (!Auth::check()) {
-                return;
-            }
+            if (!Auth::check()) return;
 
             $userId = Auth::id();
-
-            if (empty($model->created_by)) {
-                $model->created_by = $userId;
-            }
-
-            if (empty($model->updated_by)) {
-                $model->updated_by = $userId;
-            }
+            $model->created_by ??= $userId;
+            $model->updated_by ??= $userId;
         });
 
         static::updating(function ($model) {
-            if (!Auth::check()) {
-                return;
-            }
-
+            if (!Auth::check()) return;
             $model->updated_by = Auth::id();
         });
     }
@@ -86,11 +76,11 @@ class SelfEvaluationDetail extends Model
     {
         return $this->belongsTo(EvaluationStatus::class, 'status_id', 'id');
     }
+
     public function auditChecklists()
     {
         return $this->hasMany(AuditChecklist::class, 'self_evaluation_detail_id');
     }
-
 
     public static function generateNextId(): string
     {
@@ -98,6 +88,6 @@ class SelfEvaluationDetail extends Model
             ->selectRaw("MAX(CAST(SUBSTRING(id, 4) AS UNSIGNED)) as maxnum")
             ->value('maxnum');
 
-        return 'SED' . str_pad((string) ($maxNum + 1), 6, '0', STR_PAD_LEFT);
+        return 'SED' . str_pad((string)($maxNum + 1), 6, '0', STR_PAD_LEFT);
     }
 }

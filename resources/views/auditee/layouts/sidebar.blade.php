@@ -45,6 +45,22 @@
           </a>
         </li>
 
+        <li class="nav-item">
+          <a href="{{ route('auditee.temuan.index') }}"
+              class="nav-link {{ request()->routeIs('auditee.temuan.*') ? 'active' : '' }}">
+              <i class="ph-clipboard-text"></i>
+              <span>Form Temuan</span>
+          </a>
+        </li>
+
+        <li class="nav-item">
+          <a href="{{ route('auditee.atl.index') }}"
+              class="nav-link {{ request()->routeIs('auditee.atl.*') ? 'active' : '' }}">
+              <i class="ph-archive-box"></i>
+              <span>Audit Tindak Lanjut</span>
+          </a>
+        </li>
+
       </ul>
     </div>
     {{-- /main navigation --}}
