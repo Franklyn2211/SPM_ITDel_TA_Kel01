@@ -139,7 +139,10 @@ class UnifiedAuthController extends Controller
         }
 
         // daftar role yang termasuk auditee
-        $auditeeRoles = ['Dekan', 'Ketua Program Studi', 'Ketua PPKHA', 'SPM']; // tambah sesuai kebutuhan
+        $auditeeRoles = ['Dekan', 'Ketua Program Studi', 'Ketua PPKHA', 'SPM', 'Kepala Biro Administrasi Akademik dan Kemahasiswaan', 'Wakil Rektor Bidang Akademik dan Kemahasiswaan', 'Ketua UPT PP ESTEM',
+                        'Ketua Satuan Penjaminan Mutu', 'Kepala Biro/Bagian penyedia layanan kepada mahasiswa', 'Wakil Rektor Bidang Perencanaan, Keuangan dan Sumber Daya', 'Bagian Modal Manusia', 'Kepala Bagian Sarana dan Prasarana',
+                        'Kepala Pusat Teknologi dan Sistem Informasi', 'Kepala Biro Administrasi Perencanaan & Sumberdaya', 'Kepala Biro Administrasi Keuangan', 'Ketua LPPM', 'Wakil Rektor Bidang Kemitraan, Inovasi dan Kewirausahaan', 'Kepala Pusat Kemitraan & Hubungan Masyarakat',
+                        'Kepala Bidang Kemahasiswaan', 'Kepala Bidang Keasramaan dan Pembinaan Karakter', 'Kepala Bagian Modal Manusia', 'Kepala UPT Perpustakaan']; // tambah sesuai kebutuhan
         $auditorRoles = ['Ketua Auditor', 'Anggota Auditor', 'Auditor'];
 
         // VERSI SPATIE (paling simpel)

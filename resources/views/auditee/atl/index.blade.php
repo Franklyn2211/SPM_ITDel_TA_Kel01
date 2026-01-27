@@ -68,6 +68,7 @@
           </tr>
         </thead>
         <tbody>
+        @php $start = ($atls->currentPage() - 1) * $atls->perPage(); @endphp
         @forelse($atls as $i => $atl)
           @php
             $findingForm = $atl->findingForm ?? null;
@@ -77,10 +78,9 @@
             $isFinal = (($atl->status ?? '') === 'Final');
           @endphp
           <tr>
-            <td>{{ $i + 1 }}</td>
+            <td>{{ $start + $i + 1 }}</td>
             <td>
               <div class="fw-semibold">{{ $unit }}</div>
-              <div class="text-muted fs-sm">ATL: {{ $atl->id }}</div>
             </td>
             <td>{{ $acad }}</td>
             <td>
@@ -103,6 +103,9 @@
         @endforelse
         </tbody>
       </table>
+    </div>
+    <div class="card-footer border-top-0">
+      {{ $atls->onEachSide(1)->links('pagination::bootstrap-5') }}
     </div>
   </div>
 

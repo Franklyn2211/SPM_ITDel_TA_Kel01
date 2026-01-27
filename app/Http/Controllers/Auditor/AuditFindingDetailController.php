@@ -16,6 +16,20 @@ class AuditFindingDetailController extends Controller
 
     /* ================= Helpers ================= */
 
+    private function isFilled(?string $v): bool
+    {
+        if ($v === null) return false;
+        $plain = trim(preg_replace('/\s+/', ' ', strip_tags((string)$v)));
+        return $plain !== '';
+    }
+
+    private function auditorPartComplete(AuditFinding $row): bool
+    {
+        // Auditor cuma punya kewajiban di NEGATIF: severity + auditor_recommendation
+        return $this->isFilled($row->severity) && $this->isFilled($row->auditor_recommendation);
+    }
+
+
     private function currentUserRole(): ?UserRole
     {
         $u = auth()->user();
@@ -180,6 +194,10 @@ class AuditFindingDetailController extends Controller
 
         $row->loadMissing(['selfEvaluationDetail.standardAchievement']);
         $isNeg = $this->isNegativeFromRow($row);
+
+        if ($isNeg && !$this->auditorPartComplete($row)) {
+            abort(403, 'Auditee belum bisa mengisi. Menunggu auditor mengisi Kategori Temuan dan Rekomendasi Auditor.');
+        }
 
         if ($isNeg) {
             $data = $request->validate([

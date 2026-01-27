@@ -82,8 +82,6 @@ class AmiIndicatorController extends Controller
             'standard_id' => ['required', 'exists:ami_standards,id'],
             'role_ids' => ['required', 'array', 'min:1'],
             'role_ids.*' => ['exists:roles,id'],
-            'positive_result_template' => ['nullable', 'string'],
-            'negative_result_template' => ['nullable', 'string'],
         ]);
 
         // Standar wajib TA aktif, tapi boleh draft maupun aktif
@@ -98,8 +96,6 @@ class AmiIndicatorController extends Controller
                 'id' => AmiStandardIndicator::generateNextId(),
                 'description' => $data['description'],
                 'standard_id' => $data['standard_id'],
-                'positive_result_template' => $data['positive_result_template'] ?? null,
-                'negative_result_template' => $data['negative_result_template'] ?? null,
                 'active' => true,
             ]);
             $indicator->save();
@@ -132,8 +128,6 @@ class AmiIndicatorController extends Controller
             'standard_id' => ['required', 'exists:ami_standards,id'],
             'role_ids' => ['nullable', 'array'],
             'role_ids.*' => ['exists:roles,id'],
-            'positive_result_template' => ['nullable', 'string'],
-            'negative_result_template' => ['nullable', 'string'],
         ]);
 
         // Standar wajib TA aktif, tapi boleh draft maupun aktif
@@ -147,8 +141,6 @@ class AmiIndicatorController extends Controller
             $amiIndicator->update([
                 'description' => $data['description'],
                 'standard_id' => $data['standard_id'],
-                'positive_result_template' => $data['positive_result_template'] ?? null,
-                'negative_result_template' => $data['negative_result_template'] ?? null,
                 'active' => true,
             ]);
 

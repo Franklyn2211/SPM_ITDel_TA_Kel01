@@ -41,6 +41,7 @@
         </tr>
       </thead>
       <tbody>
+        @php $start = ($forms->currentPage() - 1) * $forms->perPage(); @endphp
         @forelse($forms as $i => $form)
           @php
             $details = $form->details ?? collect();
@@ -74,7 +75,7 @@
             }
           @endphp
           <tr>
-            <td>{{ $i + 1 }}</td>
+            <td>{{ $start + $i + 1 }}</td>
             <td>
               <div class="fw-semibold">{{ $form->categoryDetail->name ?? '-' }}</div>
             </td>
@@ -95,6 +96,9 @@
         @endforelse
       </tbody>
     </table>
+  </div>
+  <div class="card-footer border-top-0">
+    {{ $forms->onEachSide(1)->links('pagination::bootstrap-5') }}
   </div>
 </div>
 @endsection

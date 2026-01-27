@@ -32,12 +32,15 @@ class EvaluasiDiriController extends Controller
     private function currentUserRole(): ?UserRole
     {
         $u = auth()->user();
-        if (!$u) return null;
+        if (!$u)
+            return null;
 
-        if (method_exists($u, 'userRole') && $u->userRole) return $u->userRole;
+        if (method_exists($u, 'userRole') && $u->userRole)
+            return $u->userRole;
 
         if (!empty($u->user_role_id)) {
-            if ($ur = UserRole::find($u->user_role_id)) return $ur;
+            if ($ur = UserRole::find($u->user_role_id))
+                return $ur;
         }
 
         if (!empty($u->cis_user_id)) {
@@ -48,7 +51,8 @@ class EvaluasiDiriController extends Controller
                     ->latest('created_at')
                     ->first();
 
-            if ($ur) return $ur;
+            if ($ur)
+                return $ur;
         }
 
         return UserRole::where('id', $u->id)->where('active', 1)->first()
@@ -94,7 +98,8 @@ class EvaluasiDiriController extends Controller
     private function currentUserIsFormMember(SelfEvaluationForm $form): bool
     {
         $userId = auth()->id();
-        if (!$userId) return false;
+        if (!$userId)
+            return false;
 
         return in_array($userId, [
             $form->member_auditee_1_user_id,
@@ -115,7 +120,8 @@ class EvaluasiDiriController extends Controller
             ->pluck('standard_indicator_id')
             ->unique();
 
-        if ($picIndicatorIds->isEmpty()) return;
+        if ($picIndicatorIds->isEmpty())
+            return;
 
         $eligibleIndicatorIds = AmiStandardIndicator::query()
             ->whereIn('ami_standard_indicators.id', $picIndicatorIds)
@@ -130,13 +136,15 @@ class EvaluasiDiriController extends Controller
             ->orderBy('ami_standard_indicators.id')
             ->pluck('id');
 
-        if ($eligibleIndicatorIds->isEmpty()) return;
+        if ($eligibleIndicatorIds->isEmpty())
+            return;
 
         $existing = SelfEvaluationDetail::where('self_evaluation_form_id', $form->id)
             ->pluck('ami_standard_indicator_id');
 
         $missing = $eligibleIndicatorIds->diff($existing);
-        if ($missing->isEmpty()) return;
+        if ($missing->isEmpty())
+            return;
 
         $statusDraftId = EvaluationStatus::where('name', 'Draft')->value('id');
 
@@ -153,8 +161,8 @@ class EvaluasiDiriController extends Controller
 
     private function isDetailComplete(SelfEvaluationDetail $d): bool
     {
-        $hasil = trim((string)($d->result ?? ''));
-        $bukti = trim((string)($d->supporting_evidence_url ?? ''));
+        $hasil = trim((string) ($d->result ?? ''));
+        $bukti = trim((string) ($d->supporting_evidence_url ?? ''));
         return !is_null($d->standard_achievement_id) && $hasil !== '' && $bukti !== '';
     }
 
@@ -174,7 +182,7 @@ class EvaluasiDiriController extends Controller
         $progress = ['total' => 0, 'terisi' => 0, 'percent' => 0.0];
         $isMemberForm = false;
 
-        $q = trim((string)$request->input('q', ''));
+        $q = trim((string) $request->input('q', ''));
         $selectedStandardId = $request->input('standard_id');
         $standards = collect();
 
@@ -281,7 +289,7 @@ class EvaluasiDiriController extends Controller
 
                 if (!empty($selectedStandardId)) {
                     $filtered = $filtered->filter(function ($d) use ($selectedStandardId) {
-                        return (string)optional($d->indicator?->standard)->id === (string)$selectedStandardId;
+                        return (string) optional($d->indicator?->standard)->id === (string) $selectedStandardId;
                     })->values();
                 }
 
@@ -523,7 +531,8 @@ class EvaluasiDiriController extends Controller
         $this->ensureFormOwnedByUser($form);
         $this->ensureFormOnActiveYear($form);
 
-        if ($detail->self_evaluation_form_id !== $form->id) abort(404);
+        if ($detail->self_evaluation_form_id !== $form->id)
+            abort(404);
 
         $ur = $this->currentUserRole();
         $currentRoleId = $ur?->role_id;
@@ -563,7 +572,13 @@ class EvaluasiDiriController extends Controller
             'status_id' => $draftId,
         ]);
 
-        return redirect()->route('auditee.fed.index')->with('success', 'Butir tersimpan.');
+        // Ambil parameter page dari request agar redirect ke halaman yang sama
+        $page = $request->input('page');
+        $params = [];
+        if ($page) {
+            $params['page'] = $page;
+        }
+        return redirect()->route('auditee.fed.index', $params)->with('success', 'Butir tersimpan.');
     }
 
     public function submit(Request $request, SelfEvaluationForm $form)
@@ -606,8 +621,8 @@ class EvaluasiDiriController extends Controller
             ->get();
 
         $incomplete = $details->filter(function ($d) {
-            $hasil = trim((string)($d->result ?? ''));
-            $bukti = trim((string)($d->supporting_evidence_url ?? ''));
+            $hasil = trim((string) ($d->result ?? ''));
+            $bukti = trim((string) ($d->supporting_evidence_url ?? ''));
             return is_null($d->standard_achievement_id) || $hasil === '' || $bukti === '';
         })->count();
 
@@ -680,7 +695,8 @@ class EvaluasiDiriController extends Controller
     private function htmlToTextRun(TextRun $run, ?string $html): void
     {
         $html = $html ?? '';
-        if (trim($html) === '') return;
+        if (trim($html) === '')
+            return;
 
         $dom = new \DOMDocument();
         $html = mb_convert_encoding($html, 'HTML-ENTITIES', 'UTF-8');
@@ -697,19 +713,25 @@ class EvaluasiDiriController extends Controller
         $traverse = function ($node, $style = [], $listContext = []) use (&$traverse, $run) {
             if ($node->nodeType === XML_TEXT_NODE) {
                 $text = $node->textContent;
-                if ($text !== '') $run->addText($text, $style);
+                if ($text !== '')
+                    $run->addText($text, $style);
                 return;
             }
-            if ($node->nodeType !== XML_ELEMENT_NODE) return;
+            if ($node->nodeType !== XML_ELEMENT_NODE)
+                return;
 
             $tag = strtolower($node->nodeName);
 
-            if ($tag === 'b' || $tag === 'strong') $style['bold'] = true;
-            elseif ($tag === 'i' || $tag === 'em') $style['italic'] = true;
-            elseif ($tag === 'u') $style['underline'] = 'single';
+            if ($tag === 'b' || $tag === 'strong')
+                $style['bold'] = true;
+            elseif ($tag === 'i' || $tag === 'em')
+                $style['italic'] = true;
+            elseif ($tag === 'u')
+                $style['underline'] = 'single';
 
             if ($tag === 'p' || $tag === 'div') {
-                if ($node->previousSibling) $run->addTextBreak();
+                if ($node->previousSibling)
+                    $run->addTextBreak();
             }
             if ($tag === 'br') {
                 $run->addTextBreak();
@@ -736,9 +758,12 @@ class EvaluasiDiriController extends Controller
 
                 $marker = '• ';
                 if ($lType !== 'ul') {
-                    if ($lType === 'a') $marker = chr(96 + (($idx - 1) % 26 + 1)) . '. ';
-                    elseif ($lType === 'A') $marker = chr(64 + (($idx - 1) % 26 + 1)) . '. ';
-                    else $marker = "{$idx}. ";
+                    if ($lType === 'a')
+                        $marker = chr(96 + (($idx - 1) % 26 + 1)) . '. ';
+                    elseif ($lType === 'A')
+                        $marker = chr(64 + (($idx - 1) % 26 + 1)) . '. ';
+                    else
+                        $marker = "{$idx}. ";
                 }
 
                 $run->addTextBreak();
@@ -746,7 +771,8 @@ class EvaluasiDiriController extends Controller
                 $indentStr = str_repeat($nbsp . $nbsp . $nbsp, $depth);
                 $run->addText($indentStr . $marker, $style);
 
-                foreach ($node->childNodes as $child) $traverse($child, $style, $listContext);
+                foreach ($node->childNodes as $child)
+                    $traverse($child, $style, $listContext);
                 return;
             }
 
@@ -760,7 +786,8 @@ class EvaluasiDiriController extends Controller
                 }
             }
 
-            foreach ($node->childNodes as $child) $traverse($child, $style, $listContext);
+            foreach ($node->childNodes as $child)
+                $traverse($child, $style, $listContext);
         };
 
         $traverse($container);
@@ -768,8 +795,9 @@ class EvaluasiDiriController extends Controller
 
     private function appendEvidenceUrlToHasil(TextRun $run, ?string $url): void
     {
-        $url = trim((string)($url ?? ''));
-        if ($url === '') return;
+        $url = trim((string) ($url ?? ''));
+        if ($url === '')
+            return;
 
         $run->addTextBreak();
         $run->addText('Bukti: ', ['bold' => true]);
@@ -785,7 +813,8 @@ class EvaluasiDiriController extends Controller
         $approvedId = EvaluationStatus::where('name', 'Disetujui')->value('id');
         abort_unless($form->status_id === $submittedId || $form->status_id === $approvedId, 403, 'Dokumen hanya tersedia setelah form dikirim atau disetujui.');
 
-        if (!class_exists(\ZipArchive::class)) abort(500, 'PHP Zip extension belum aktif.');
+        if (!class_exists(\ZipArchive::class))
+            abort(500, 'PHP Zip extension belum aktif.');
 
         $details = SelfEvaluationDetail::with(['indicator.standard', 'standardAchievement'])
             ->where('self_evaluation_form_id', $form->id)
@@ -803,7 +832,8 @@ class EvaluasiDiriController extends Controller
             ->get();
 
         $templateAbsPath = storage_path('app/' . self::TEMPLATE_PATH);
-        if (!is_file($templateAbsPath)) abort(500, 'Template DOCX tidak ditemukan: ' . self::TEMPLATE_PATH);
+        if (!is_file($templateAbsPath))
+            abort(500, 'Template DOCX tidak ditemukan: ' . self::TEMPLATE_PATH);
 
         $tp = new TemplateProcessor($templateAbsPath);
 
@@ -861,7 +891,7 @@ class EvaluasiDiriController extends Controller
                 ->implode(', ');
 
             $rows[] = [
-                'no' => (string)$index,
+                'no' => (string) $index,
                 'sumber' => trim($picRoleNames),
                 'melampaui' => $flag === 'melampaui' ? '✓' : '',
                 'mencapai' => $flag === 'mencapai' ? '✓' : '',
@@ -874,19 +904,24 @@ class EvaluasiDiriController extends Controller
 
         foreach ($rows as $idx => $_) {
             $i = $idx + 1;
-            if (isset($standarBlocks[$i])) $tp->setComplexBlock("standar#{$i}", $standarBlocks[$i]);
-            if (isset($hasilBlocks[$i])) $tp->setComplexBlock("hasil#{$i}", $hasilBlocks[$i]);
-            if (isset($faktorBlocks[$i])) $tp->setComplexBlock("faktor#{$i}", $faktorBlocks[$i]);
+            if (isset($standarBlocks[$i]))
+                $tp->setComplexBlock("standar#{$i}", $standarBlocks[$i]);
+            if (isset($hasilBlocks[$i]))
+                $tp->setComplexBlock("hasil#{$i}", $hasilBlocks[$i]);
+            if (isset($faktorBlocks[$i]))
+                $tp->setComplexBlock("faktor#{$i}", $faktorBlocks[$i]);
         }
 
         $safeUnit = $this->safeFilename($unitName ?: 'Unit');
         $filename = "F-219_Formulir_Evaluasi_Diri_{$safeUnit}.docx";
 
         $tmpDir = storage_path('app/tmp');
-        if (!is_dir($tmpDir)) @mkdir($tmpDir, 0775, true);
+        if (!is_dir($tmpDir))
+            @mkdir($tmpDir, 0775, true);
 
         $target = rtrim($tmpDir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $filename;
-        if (file_exists($target)) @unlink($target);
+        if (file_exists($target))
+            @unlink($target);
 
         $tp->saveAs($target);
 
@@ -903,8 +938,10 @@ class EvaluasiDiriController extends Controller
         abort_unless($form->status_id === $submittedId || $form->status_id === $approvedId, 403, 'Dokumen hanya tersedia setelah form dikirim atau disetujui.');
 
         $convertApiSecret = env('CONVERTAPI_SECRET');
-        if (empty($convertApiSecret)) abort(500, 'CONVERTAPI_SECRET belum dikonfigurasi. Silakan set di file .env');
-        if (!class_exists(\ZipArchive::class)) abort(500, 'PHP Zip extension belum aktif.');
+        if (empty($convertApiSecret))
+            abort(500, 'CONVERTAPI_SECRET belum dikonfigurasi. Silakan set di file .env');
+        if (!class_exists(\ZipArchive::class))
+            abort(500, 'PHP Zip extension belum aktif.');
 
         // Generate DOCX dulu pakai exportDoc logic, tapi tanpa return download
         $details = SelfEvaluationDetail::with(['indicator.standard', 'standardAchievement'])
@@ -923,7 +960,8 @@ class EvaluasiDiriController extends Controller
             ->get();
 
         $templateAbsPath = storage_path('app/' . self::TEMPLATE_PATH);
-        if (!is_file($templateAbsPath)) abort(500, 'Template DOCX tidak ditemukan: ' . self::TEMPLATE_PATH);
+        if (!is_file($templateAbsPath))
+            abort(500, 'Template DOCX tidak ditemukan: ' . self::TEMPLATE_PATH);
 
         $tp = new TemplateProcessor($templateAbsPath);
 
@@ -981,7 +1019,7 @@ class EvaluasiDiriController extends Controller
                 ->implode(', ');
 
             $rows[] = [
-                'no' => (string)$index,
+                'no' => (string) $index,
                 'sumber' => trim($picRoleNames),
                 'melampaui' => $flag === 'melampaui' ? '✓' : '',
                 'mencapai' => $flag === 'mencapai' ? '✓' : '',
@@ -994,9 +1032,12 @@ class EvaluasiDiriController extends Controller
 
         foreach ($rows as $idx => $_) {
             $i = $idx + 1;
-            if (isset($standarBlocks[$i])) $tp->setComplexBlock("standar#{$i}", $standarBlocks[$i]);
-            if (isset($hasilBlocks[$i])) $tp->setComplexBlock("hasil#{$i}", $hasilBlocks[$i]);
-            if (isset($faktorBlocks[$i])) $tp->setComplexBlock("faktor#{$i}", $faktorBlocks[$i]);
+            if (isset($standarBlocks[$i]))
+                $tp->setComplexBlock("standar#{$i}", $standarBlocks[$i]);
+            if (isset($hasilBlocks[$i]))
+                $tp->setComplexBlock("hasil#{$i}", $hasilBlocks[$i]);
+            if (isset($faktorBlocks[$i]))
+                $tp->setComplexBlock("faktor#{$i}", $faktorBlocks[$i]);
         }
 
         $safeUnit = $this->safeFilename($unitName ?: 'Unit');
@@ -1004,13 +1045,16 @@ class EvaluasiDiriController extends Controller
         $pdfFilename = "F-219_Formulir_Evaluasi_Diri_{$safeUnit}.pdf";
 
         $tmpDir = storage_path('app/tmp');
-        if (!is_dir($tmpDir)) @mkdir($tmpDir, 0775, true);
+        if (!is_dir($tmpDir))
+            @mkdir($tmpDir, 0775, true);
 
         $docxPath = rtrim($tmpDir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $docxFilename;
         $pdfPath = rtrim($tmpDir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $pdfFilename;
 
-        if (file_exists($docxPath)) @unlink($docxPath);
-        if (file_exists($pdfPath)) @unlink($pdfPath);
+        if (file_exists($docxPath))
+            @unlink($docxPath);
+        if (file_exists($pdfPath))
+            @unlink($pdfPath);
 
         $tp->saveAs($docxPath);
 
@@ -1025,11 +1069,13 @@ class EvaluasiDiriController extends Controller
                 if (!empty($files)) {
                     usort($files, fn($a, $b) => filemtime($b) - filemtime($a));
                     $convertedPdf = $files[0];
-                    if ($convertedPdf !== $pdfPath) rename($convertedPdf, $pdfPath);
+                    if ($convertedPdf !== $pdfPath)
+                        rename($convertedPdf, $pdfPath);
                 }
             }
 
-            if (file_exists($docxPath)) @unlink($docxPath);
+            if (file_exists($docxPath))
+                @unlink($docxPath);
 
             if (!file_exists($pdfPath)) {
                 abort(500, 'Gagal mengkonversi dokumen ke PDF. File PDF tidak ditemukan setelah konversi.');
@@ -1037,8 +1083,10 @@ class EvaluasiDiriController extends Controller
 
             return response()->download($pdfPath, $pdfFilename)->deleteFileAfterSend(true);
         } catch (\Throwable $e) {
-            if (file_exists($docxPath)) @unlink($docxPath);
-            if (file_exists($pdfPath)) @unlink($pdfPath);
+            if (file_exists($docxPath))
+                @unlink($docxPath);
+            if (file_exists($pdfPath))
+                @unlink($pdfPath);
             abort(500, 'Gagal mengkonversi ke PDF: ' . $e->getMessage());
         }
     }

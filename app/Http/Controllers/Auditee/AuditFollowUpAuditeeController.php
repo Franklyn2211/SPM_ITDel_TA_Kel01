@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Auditee;
 
 use App\Http\Controllers\Controller;
 use App\Models\AcademicConfig;
+use App\Models\AuditFinding;
 use App\Models\AuditFindingForm;
 use App\Models\AuditFollowUpDetail;
 use App\Models\AuditFollowUpForm;
@@ -15,7 +16,7 @@ class AuditFollowUpAuditeeController extends Controller
     private const FED_APPROVED_STATUS_NAME = 'Disetujui';
     private const ATL_STATUS_FINAL = 'Final';
 
-    /* ================== Helpers mirip Temuan ================== */
+    /* ================== Helpers ================== */
 
     private function activeAcademicId(): ?string
     {
@@ -24,38 +25,34 @@ class AuditFollowUpAuditeeController extends Controller
 
     private function normalize(?string $v): string
     {
-        return trim((string) ($v ?? ''));
+        return trim((string)($v ?? ''));
     }
 
     /**
-     * AUTH yang sama persis seperti temuan:
-     * - Ketua Auditee: compare user->name dengan fed->head_auditee_name
-     * - Anggota Auditee: compare user->id dengan fed->member_auditee_*_user_id
+     * AUTH sama seperti Temuan
      */
     private function ensureAuditeeCanAccessFed(SelfEvaluationForm $fed): void
     {
         $user = auth()->user();
         abort_unless($user, 403, 'User belum login.');
 
-        $myUserId = (string) $user->id;
-        $myName   = trim(mb_strtolower((string) ($user->name ?? '')));
+        $myUserId = (string)$user->id;
+        $myName = trim(mb_strtolower((string)($user->name ?? '')));
 
-        // 1) Ketua auditee (STRING NAME)
-        $headName = trim(mb_strtolower((string) ($fed->head_auditee_name ?? '')));
+        // Ketua auditee (NAME)
+        $headName = trim(mb_strtolower((string)($fed->head_auditee_name ?? '')));
         if ($headName !== '' && $myName !== '' && $myName === $headName) {
             return;
         }
 
-        // 2) Anggota auditee (USER ID)
+        // Anggota auditee (USER ID)
         $memberIds = array_filter([
             $fed->member_auditee_1_user_id ?? null,
             $fed->member_auditee_2_user_id ?? null,
             $fed->member_auditee_3_user_id ?? null,
         ], fn($v) => !is_null($v) && (string)$v !== '');
 
-        $memberIds = array_map('strval', $memberIds);
-
-        if (in_array($myUserId, $memberIds, true)) {
+        if (in_array($myUserId, array_map('strval', $memberIds), true)) {
             return;
         }
 
@@ -63,34 +60,37 @@ class AuditFollowUpAuditeeController extends Controller
     }
 
     /**
-     * Pastikan ATL memang milik FED yang bisa diakses auditee.
-     * Caranya: atl -> findingForm -> selfEvaluationForm -> cek akses sama seperti temuan.
+     * Pastikan ATL:
+     * - milik FED tahun aktif
+     * - FED disetujui
+     * - user auditee valid
      */
     private function ensureAuditeeCanAccessAtl(AuditFollowUpForm $atl): SelfEvaluationForm
     {
-        $findingForm = $atl->findingForm ?? AuditFindingForm::find($atl->audit_finding_form_id);
-        abort_unless($findingForm, 404, 'Form temuan tidak ditemukan.');
+        $findingForm = AuditFindingForm::findOrFail($atl->audit_finding_form_id);
 
         $fed = SelfEvaluationForm::with(['status', 'categoryDetail', 'academicConfig'])
             ->findOrFail($findingForm->self_evaluation_form_id);
 
-        $academicId = $this->activeAcademicId();
-        abort_unless($academicId && (string)$fed->academic_config_id === (string)$academicId, 403, 'FED bukan tahun aktif.');
+        abort_unless(
+            (string)$fed->academic_config_id === (string)$this->activeAcademicId(),
+            403,
+            'ATL bukan milik tahun akademik aktif.'
+        );
 
-        abort_unless(optional($fed->status)->name === self::FED_APPROVED_STATUS_NAME, 403, 'FED belum Disetujui.');
+        abort_unless(
+            optional($fed->status)->name === self::FED_APPROVED_STATUS_NAME,
+            403,
+            'FED belum Disetujui.'
+        );
 
         $this->ensureAuditeeCanAccessFed($fed);
 
         return $fed;
     }
 
-    /* ================== Pages ================== */
+    /* ================== Index ================== */
 
-    /**
-     * Index ATL auditee: mirip temuan index.
-     * Bedanya: yang ditampilkan adalah ATL yang sudah dibuat (audit_follow_up_forms)
-     * berdasarkan FED yang bisa diakses user.
-     */
     public function index(Request $request)
     {
         $academicId = $this->activeAcademicId();
@@ -99,77 +99,76 @@ class AuditFollowUpAuditeeController extends Controller
         $user = auth()->user();
         abort_unless($user, 403, 'User belum login.');
 
-        $myUserId = (string) $user->id;
-        $myName   = trim(mb_strtolower((string) ($user->name ?? '')));
+        $myUserId = (string)$user->id;
+        $myName = trim(mb_strtolower((string)($user->name ?? '')));
+        $q = trim((string)$request->query('q', ''));
 
-        $q = trim((string) $request->query('q', ''));
-
-        // 1) Ambil FED tahun aktif yang disetujui dan user ini punya akses
-        $feds = SelfEvaluationForm::with(['categoryDetail', 'status', 'academicConfig'])
+        // FED tahun aktif & disetujui yang user punya akses
+        $feds = SelfEvaluationForm::with(['categoryDetail'])
             ->where('academic_config_id', $academicId)
             ->where('active', 1)
             ->whereHas('status', fn($s) => $s->where('name', self::FED_APPROVED_STATUS_NAME))
             ->where(function ($qq) use ($myUserId, $myName) {
-                // Ketua (berdasarkan NAMA)
                 if ($myName !== '') {
                     $qq->whereRaw('LOWER(TRIM(head_auditee_name)) = ?', [$myName]);
                 }
-
-                // Anggota (berdasarkan USER ID)
                 $qq->orWhere('member_auditee_1_user_id', $myUserId)
                    ->orWhere('member_auditee_2_user_id', $myUserId)
                    ->orWhere('member_auditee_3_user_id', $myUserId);
             })
-            ->when($q !== '', function ($qq) use ($q) {
-                $qq->whereHas('categoryDetail', fn($x) => $x->where('name', 'like', "%{$q}%"));
-            })
-            ->orderBy('category_detail_id')
+            ->when($q !== '', fn($qq) =>
+                $qq->whereHas('categoryDetail', fn($x) => $x->where('name', 'like', "%{$q}%"))
+            )
             ->get();
 
-        // 2) Cari finding form dari FED tsb
+        // FindingForm tahun berjalan saja
         $findingFormIds = AuditFindingForm::whereIn('self_evaluation_form_id', $feds->pluck('id'))
             ->where('active', 1)
-            ->pluck('id')
-            ->toArray();
+            ->pluck('id');
 
-        // 3) Ambil ATL yang sudah dibuat dari finding form
+        // ✅ ATL tahun berjalan SAJA
         $atls = AuditFollowUpForm::with([
-                'findingForm.selfEvaluationForm.categoryDetail',
-                'findingForm.selfEvaluationForm.academicConfig',
-            ])
+            'findingForm.selfEvaluationForm.categoryDetail',
+            'findingForm.selfEvaluationForm.academicConfig',
+        ])
             ->whereIn('audit_finding_form_id', $findingFormIds)
             ->where('active', 1)
             ->latest('updated_at')
-            ->get();
+            ->paginate(10)
+            ->withQueryString();
 
         return view('auditee.atl.index', compact('atls', 'q'));
     }
 
-    /**
-     * Show ATL auditee: auditee isi realisasi + efektivitas.
-     */
+    /* ================== Show ================== */
+
     public function show(AuditFollowUpForm $atl)
     {
         $fed = $this->ensureAuditeeCanAccessAtl($atl);
+        $findingForm = AuditFindingForm::findOrFail($atl->audit_finding_form_id);
 
         $unitName = $fed->categoryDetail?->name ?? $atl->area ?? 'Unit/Prodi';
         $academicText = $fed->academicConfig?->name ?? $fed->academicConfig?->tahun ?? null;
 
+        // ✅ DETAIL HANYA DARI TEMUAN TAHUN BERJALAN
         $details = AuditFollowUpDetail::with([
-                'finding.selfEvaluationDetail.standardAchievement',
-                'finding.selfEvaluationDetail.indicator.standard',
-                'finding.selfEvaluationDetail.indicator.pics.role',
-            ])
+            'finding.selfEvaluationDetail.standardAchievement',
+            'finding.selfEvaluationDetail.indicator.standard',
+            'finding.form.selfEvaluationForm.academicConfig',
+        ])
             ->where('audit_follow_up_form_id', $atl->id)
             ->where('active', 1)
-            ->orderBy('id')
-            ->get();
+            ->whereHas('finding', function ($q) use ($findingForm) {
+                $q->where('audit_finding_form_id', $findingForm->id);
+            })
+            ->paginate(10)
+            ->withQueryString();
 
-        $total = $details->count();
-        $complete = $details->filter(function ($d) {
-            return $this->normalize($d->follow_up_realization) !== ''
-                && $this->normalize($d->effectiveness) !== '';
-        })->count();
+        $total = $details->total();
+        $complete = collect($details->items())->filter(fn($d) =>
+            $this->normalize($d->follow_up_realization) !== '' &&
+            $this->normalize($d->effectiveness) !== ''
+        )->count();
 
         $progress = [
             'total' => $total,
@@ -191,32 +190,34 @@ class AuditFollowUpAuditeeController extends Controller
         ));
     }
 
-    /**
-     * Auditee update row: hanya follow_up_realization + effectiveness.
-     * Status & status_description milik auditor.
-     */
+    /* ================== Update ================== */
+
     public function updateRow(Request $request, AuditFollowUpForm $atl, AuditFollowUpDetail $detail)
     {
-        $this->ensureAuditeeCanAccessAtl($atl);
+        $fed = $this->ensureAuditeeCanAccessAtl($atl);
+        $findingForm = AuditFindingForm::findOrFail($atl->audit_finding_form_id);
 
-        if ((string)$detail->audit_follow_up_form_id !== (string)$atl->id) {
-            abort(404);
-        }
+        abort_unless((string)$detail->audit_follow_up_form_id === (string)$atl->id, 404);
 
         if (($atl->status ?? '') === self::ATL_STATUS_FINAL) {
             return back()->with('error', 'ATL sudah Final. Tidak bisa diubah.');
         }
+
+        // ✅ GUARD KRITIS: DETAIL HARUS MILIK TEMUAN TAHUN BERJALAN
+        $finding = AuditFinding::findOrFail($detail->audit_finding_id);
+        abort_unless(
+            (string)$finding->audit_finding_form_id === (string)$findingForm->id,
+            403,
+            'Detail ini berasal dari ATL histori dan tidak boleh diedit.'
+        );
 
         $data = $request->validate([
             'follow_up_realization' => ['nullable', 'string'],
             'effectiveness' => ['nullable', 'string', 'max:255'],
         ]);
 
-        $real = isset($data['follow_up_realization']) ? trim((string)$data['follow_up_realization']) : null;
-        $eff  = isset($data['effectiveness']) ? trim((string)$data['effectiveness']) : null;
-
-        $detail->follow_up_realization = ($real === '') ? null : $data['follow_up_realization'];
-        $detail->effectiveness = ($eff === '') ? null : $eff;
+        $detail->follow_up_realization = $this->normalize($data['follow_up_realization'] ?? '') ?: null;
+        $detail->effectiveness = $this->normalize($data['effectiveness'] ?? '') ?: null;
 
         if (property_exists($detail, 'updated_by')) {
             $detail->updated_by = auth()->id();

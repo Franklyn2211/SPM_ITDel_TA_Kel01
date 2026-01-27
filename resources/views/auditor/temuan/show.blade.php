@@ -35,18 +35,42 @@
             <i class="ph-gear me-1"></i> Edit Header / Assign Auditor
           </button>
 
-          <form method="POST" action="{{ route('auditor.temuan.finalize', $form->id) }}">
-            @csrf
-            <button type="submit" class="btn btn-success btn-sm rounded-pill"
-                    onclick="return confirm('Finalkan form temuan? Setelah Final, tidak bisa edit lagi.')">
-              <i class="ph-lock-key me-1"></i> Finalkan
-            </button>
-          </form>
+          <button type="button" class="btn btn-success btn-sm rounded-pill" data-bs-toggle="modal" data-bs-target="#modalConfirmFinalize">
+            <i class="ph-lock-key me-1"></i> Finalkan
+          </button>
+        {{-- =======================
+             MODAL: KONFIRMASI FINAL
+             ======================= --}}
+        <div class="modal fade" id="modalConfirmFinalize" tabindex="-1" aria-labelledby="modalConfirmFinalizeLabel" aria-hidden="true">
+          <div class="modal-dialog">
+            <form method="POST" action="{{ route('auditor.temuan.finalize', $form->id) }}" class="modal-content">
+              @csrf
+              <div class="modal-header">
+                <h5 class="modal-title" id="modalConfirmFinalizeLabel">Konfirmasi Finalisasi Temuan</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
+              </div>
+              <div class="modal-body">
+                <div class="mb-2">
+                  Yakin ingin memfinalkan form temuan ini?<br>
+                  <b>Setelah difinalkan, form tidak dapat diedit lagi.</b>
+                </div>
+              </div>
+              <div class="modal-footer">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Batal</button>
+                <button type="submit" class="btn btn-success">Finalkan</button>
+              </div>
+            </form>
+          </div>
+        </div>
         @else
-          <a class="btn btn-primary btn-sm rounded-pill"
-             href="{{ route('auditor.temuan.exportPdf', $form->id) }}">
-            <i class="ph-download-simple me-1"></i> Unduh PDF
-          </a>
+        <a class="btn btn-primary btn-sm rounded-pill"
+            href="{{ route('auditor.temuan.exportDocx', $form->id) }}">
+        <i class="ph-download-simple me-1"></i> Unduh DOCX
+        </a>
+        <a class="btn btn-primary btn-sm rounded-pill"
+            href="{{ route('auditor.temuan.exportPdf', $form->id) }}">
+        <i class="ph-download-simple me-1"></i> Unduh PDF
+        </a>
         @endif
       </div>
     </div>

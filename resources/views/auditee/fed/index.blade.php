@@ -36,8 +36,8 @@
                 class="btn btn-success btn-sm rounded-pill"
                 data-bs-toggle="modal"
                 data-bs-target="#modalConfirmSubmit"
-                @if(($progress['total'] ?? 0) === 0 || ($progress['terisi'] ?? 0) < ($progress['total'] ?? 0))
-                disabled
+                @if((isset($isSubmitted) && $isSubmitted) || ($progress['total'] ?? 0) === 0 || ($progress['terisi'] ?? 0) < ($progress['total'] ?? 0))
+                disabled style="pointer-events:none;opacity:0.5;"
                 @endif>
                 <i class="ph-paper-plane-tilt me-2"></i> Submit
               </button>
@@ -264,7 +264,7 @@
                     data-faktor="{{ e($d->contributing_factors ?? '') }}"
                     data-pos-template="{{ e($d->indicator->positive_result_template ?? '') }}"
                     data-neg-template="{{ e($d->indicator->negative_result_template ?? '') }}"
-                    @if($readOnly) disabled @endif>
+                    @if(isset($isSubmitted) && $isSubmitted) disabled style="pointer-events:none;opacity:0.5;" @endif>
                     <i class="ph-pencil me-1"></i> {{ $isFilled ? 'Edit' : 'Isi' }}
                   </button>
                 </td>
@@ -546,6 +546,7 @@
 <div class="modal fade" id="modalIsiFed" tabindex="-1" aria-hidden="true" data-bs-focus="false">
   <div class="modal-dialog modal-xl">
     <form method="POST" id="formIsiFed" class="modal-content">
+      <input type="hidden" name="page" id="fed_current_page" value="{{ request('page', 1) }}">
       @csrf
       @method('PUT')
 
@@ -788,6 +789,12 @@
     const faktorEl = $('#modal_faktor');
 
     modalEl.addEventListener('show.bs.modal', function(ev) {
+      // Set hidden page input agar tetap di halaman yang sama setelah submit
+      const pageInput = document.getElementById('fed_current_page');
+      if (pageInput) {
+        const urlParams = new URLSearchParams(window.location.search);
+        pageInput.value = urlParams.get('page') || '1';
+      }
       const btn = ev.relatedTarget;
       if (!btn) return;
 

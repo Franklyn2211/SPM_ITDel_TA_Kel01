@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\AcademicConfig;
 use App\Models\AuditFinding;
 use App\Models\AuditFindingForm;
+use App\Models\AuditFollowUpDetail;
+use App\Models\AuditFollowUpForm;
 use App\Models\SelfEvaluationForm;
 use App\Models\UserRole;
 use ConvertApi\ConvertApi;
@@ -207,19 +209,6 @@ class AuditFindingExportController extends Controller
         $traverse($container);
     }
 
-    private function addEvidenceUrlToRun(TextRun $run, ?string $url): void
-    {
-        $url = trim((string)($url ?? ''));
-        if ($url === '') return;
-
-        // normalize
-        if (!preg_match('~^https?://~i', $url)) $url = 'https://' . $url;
-
-        $run->addTextBreak();
-        $run->addText('Bukti: ', ['bold' => true]);
-        $run->addLink($url, $url, ['color' => '0000FF', 'underline' => 'single']);
-    }
-
     private function safeFilename(string $name): string
     {
         $name = preg_replace('/[\\\\\\/:*?"<>|]+/', '', $name);
@@ -236,6 +225,58 @@ class AuditFindingExportController extends Controller
         }
         if (preg_match('/\b(\d{4})\b/', $raw, $m)) return $m[1];
         return '0000';
+    }
+
+        /**
+         * Dari acadShort "2526" => "2025"
+         * Rule: ambil 2 digit pertama, prefix "20"
+         */
+        private function academicStartYear(?AcademicConfig $ac): string
+        {
+            $short = $this->academicShort($ac); // contoh: 2526
+            if (preg_match('/^(\d{2})\d{2}$/', $short, $m)) {
+                return '20' . $m[1];
+            }
+
+            // fallback kalau gak cocok
+            if (preg_match('/\b(20\d{2})\b/', trim((string) ($ac->academic_code ?? $ac->name ?? '')), $m2)) {
+                return $m2[1];
+            }
+
+            return (string) now()->year;
+        }
+
+        /**
+         * Dari acadShort "2526" => "2025-2026"
+         */
+        private function academicRange(?AcademicConfig $ac): string
+        {
+            $short = $this->academicShort($ac); // contoh: 2526
+            if (preg_match('/^(\d{2})(\d{2})$/', $short, $m)) {
+                $start = '20' . $m[1];
+                $end   = '20' . $m[2];
+                return "{$start}-{$end}";
+            }
+
+            // fallback: pakai teks academicText kalau sudah berformat
+            $txt = $this->academicText($ac);
+            return $txt !== '-' ? $txt : (string) now()->year . '-' . (string) (now()->year + 1);
+        }
+
+
+    private function academicText(?AcademicConfig $ac): string
+    {
+        if (!$ac) return '-';
+        return (string) ($ac->academic_code ?? $ac->name ?? $ac->periode ?? $ac->tahun ?? '-');
+    }
+
+    /**
+     * "Tahun sebelumnya": ambil academic config non-aktif terbaru.
+     * Kalau kamu punya kolom urutan/tahun_awal, silakan ganti logikanya.
+     */
+    private function prevAcademicConfig(?AcademicConfig $current): ?AcademicConfig
+    {
+        return AcademicConfig::where('active', false)->orderByDesc('created_at')->first();
     }
 
     private function formatNoTemuan(string $prefix, string $unitCode, string $acadShort, int $runningNo): string
@@ -278,15 +319,148 @@ class AuditFindingExportController extends Controller
         return $name !== '' ? $name : trim((string) ($ur->name ?? $ur->username ?? ''));
     }
 
-    /* ================= Export PDF ================= */
+    /**
+     * Ambil detail ATL tahun sebelumnya untuk unit/prodi yang sama.
+     */
+    private function prevAtlDetails(SelfEvaluationForm $currentFed): \Illuminate\Support\Collection
+    {
+        $currentAc = AcademicConfig::where('active', true)->first();
+        $prevAc = $this->prevAcademicConfig($currentAc);
 
-    public function exportPdf(AuditFindingForm $form): BinaryFileResponse
+        if (!$prevAc) return collect();
+
+        // cari FED tahun sebelumnya untuk unit/prodi sama
+        $prevFed = SelfEvaluationForm::where('active', 1)
+            ->where('academic_config_id', $prevAc->id)
+            ->where('category_detail_id', $currentFed->category_detail_id)
+            ->orderByDesc('created_at')
+            ->first();
+
+        if (!$prevFed) return collect();
+
+        // cari form temuan FINAL tahun sebelumnya
+        $prevFindingForm = AuditFindingForm::where('active', 1)
+            ->where('self_evaluation_form_id', $prevFed->id)
+            ->where('status', self::FORM_STATUS_FINAL)
+            ->orderByDesc('audit_date')
+            ->first();
+
+        if (!$prevFindingForm) return collect();
+
+        // cari ATL FINAL yang terkait
+        $prevAtl = AuditFollowUpForm::where('active', 1)
+            ->where('audit_finding_form_id', $prevFindingForm->id)
+            ->where('status', self::FORM_STATUS_FINAL)
+            ->orderByDesc('audit_date')
+            ->first();
+
+        if (!$prevAtl) return collect();
+
+        return AuditFollowUpDetail::with([
+                'finding.selfEvaluationDetail.indicator.standard',
+            ])
+            ->where('active', 1)
+            ->where('audit_follow_up_form_id', $prevAtl->id)
+            ->orderBy('id')
+            ->get();
+    }
+
+    /**
+     * Inject tabel ATL sebelumnya ke template F-220.
+     * Butuh placeholder: prev_no (anchor) dan kolom prev_*
+     */
+        private function fillPrevAtlToTemplateF220(TemplateProcessor $tp, SelfEvaluationForm $currentFed): void
+        {
+            $prevDetails = $this->prevAtlDetails($currentFed);
+
+            // cari academic prev untuk bikin acadShort prev
+            $currentAc = AcademicConfig::where('active', true)->first();
+            $prevAc = $this->prevAcademicConfig($currentAc);
+
+            $prevAcadShort = $this->academicShort($prevAc);
+
+            // cari unitCode prev (kalau prevFed ada, lebih akurat)
+            $prevUnitCode = strtoupper(trim((string) optional($currentFed->categoryDetail)->code));
+            if ($prevUnitCode === '') $prevUnitCode = 'UNIT';
+
+            $rows = [];
+
+            foreach ($prevDetails as $idx => $d) {
+                $i = $idx + 1;
+
+                $finding   = $d->finding;
+                $seDetail  = $finding?->selfEvaluationDetail;
+                $indicator = $seDetail?->indicator;
+                $standard  = $indicator?->standard;
+
+                $stdName  = $this->cleanText($standard?->name, '');
+                $plainInd = $this->cleanText($indicator?->description ? strip_tags($indicator->description) : '', '');
+                $stdText  = trim($stdName . ($plainInd !== '' ? " - {$plainInd}" : ''));
+
+                $plan = (string) ($finding?->corrective_action_plan ?? $finding?->follow_up_plan ?? '');
+                $planText = $this->cleanText($plan, '-');
+
+                $jadwal = !empty($finding?->due_date)
+                    ? \Carbon\Carbon::parse($finding->due_date)->format('d/m/Y')
+                    : '-';
+
+                // nomor temuan: pakai format TP/TN juga
+                $isNeg = false;
+                if ($finding) {
+                    $isNeg = $this->isNegative($finding);
+                }
+                $prefix = $isNeg ? 'TN' : 'TP';
+                $noTemuanFormatted = $this->formatNoTemuan($prefix, $prevUnitCode, $prevAcadShort, $i);
+
+                $rows[] = [
+                    'prev_no' => (string) $i,
+                    'prev_no_temuan' => $noTemuanFormatted,
+                    'prev_standar' => $stdText !== '' ? $stdText : '-',
+                    'prev_deskripsi' => $this->cleanText($seDetail?->result ?? '-', '-'),
+                    'prev_realisasi' => $this->cleanText($d->follow_up_realization ?? '-', '-'),
+
+                    // checklist (samain pakai ✓ biar konsisten)
+                    'prev_open' => (($d->status ?? '') === 'Open') ? '✓' : '',
+                    'prev_toleran' => (($d->status ?? '') === 'Toleran') ? '✓' : '',
+
+                    'prev_rencana' => $planText,
+                    'prev_jadwal' => $jadwal,
+
+                    // PIC role names (pakai helper yang sama)
+                    'prev_penanggung_jawab' => $this->cleanText($this->picRoleNames($indicator?->id), '-'),
+                ];
+            }
+
+            if (count($rows) === 0) {
+                $rows[] = [
+                    'prev_no' => '1',
+                    'prev_no_temuan' => '-',
+                    'prev_standar' => '-',
+                    'prev_deskripsi' => '-',
+                    'prev_realisasi' => '-',
+                    'prev_open' => '',
+                    'prev_toleran' => '',
+                    'prev_rencana' => '-',
+                    'prev_jadwal' => '-',
+                    'prev_penanggung_jawab' => '-',
+                ];
+            }
+
+            try {
+                $tp->cloneRowAndSetValues('prev_no', $rows);
+            } catch (\Throwable $e) {
+                // kalau template belum punya placeholder prev_no, biarin (jangan nge-crash export)
+            }
+        }
+
+
+    /**
+     * Build docx path untuk F-220 supaya exportDocx & exportPdf sama hasilnya.
+     */
+    private function buildDocxF220(AuditFindingForm $form): array
     {
         $this->ensureUserCanAccessForm($form);
         abort_unless($form->status === self::FORM_STATUS_FINAL, 403, 'Dokumen hanya tersedia setelah form Final.');
-
-        $convertApiSecret = env('CONVERTAPI_SECRET');
-        abort_unless(!empty($convertApiSecret), 500, 'CONVERTAPI_SECRET belum dikonfigurasi.');
         abort_unless(class_exists(\ZipArchive::class), 500, 'PHP Zip extension belum aktif.');
 
         $fed = SelfEvaluationForm::with(['academicConfig', 'categoryDetail'])
@@ -317,6 +491,14 @@ class AuditFindingExportController extends Controller
         $ketuaAuditor   = $this->userRoleName($form->auditor_user_role_id);
         $anggotaAuditor = $this->userRoleName($form->member_auditor_user_role_id);
 
+        // === tahun dinamis ===
+        // untuk judul "HASIL AUDIT MUTU INTERNAL ...." -> 2025-2026
+        $tp->setValue('tahun_ami', $this->academicRange($fed->academicConfig));
+
+        // untuk kode formulir kanan atas "F-220/SPMI/2025" -> 2025
+        $tp->setValue('tahun_kode', $this->academicStartYear($fed->academicConfig));
+
+
         $tp->setValue('area', $unitName);
         $tp->setValue('auditee', $unitName);
         $tp->setValue('ketua_auditee', $ketuaAuditee);
@@ -326,8 +508,6 @@ class AuditFindingExportController extends Controller
 
         $tp->setValue('nama_ketua_auditee', $ketuaAuditee);
         $tp->setValue('nama_ketua_auditor', $ketuaAuditor);
-
-        $evidenceCol = self::EVIDENCE_URL_COLUMN;
 
         /* ================= POSITIF ================= */
         $pRows = [];
@@ -357,10 +537,8 @@ class AuditFindingExportController extends Controller
             $this->parseHtmlToTextRun($stdRun, $indicator?->description ?? '');
             $pStandarBlocks[$i] = $stdRun;
 
-            // ===== Deskripsi kondisi (FED) + BUKTI URL jadi hyperlink =====
             $descRun = new TextRun();
             $this->parseHtmlToTextRun($descRun, $detail?->result ?? '');
-            $this->addEvidenceUrlToRun($descRun, $detail?->{$evidenceCol} ?? null);
             $pDeskripsiBlocks[$i] = $descRun;
 
             $fakRun = new TextRun();
@@ -439,10 +617,8 @@ class AuditFindingExportController extends Controller
             $this->parseHtmlToTextRun($stdRun, $indicator?->description ?? '');
             $nStandarBlocks[$i] = $stdRun;
 
-            // ===== Deskripsi kondisi (FED) + BUKTI URL jadi hyperlink =====
             $descRun = new TextRun();
             $this->parseHtmlToTextRun($descRun, $detail?->result ?? '');
-            $this->addEvidenceUrlToRun($descRun, $detail?->{$evidenceCol} ?? null);
             $nDeskripsiBlocks[$i] = $descRun;
 
             $fakRun = new TextRun();
@@ -491,23 +667,45 @@ class AuditFindingExportController extends Controller
             try { $tp->setComplexBlock("n_rencana_koreksi#{$i}", $nRencanaKoreksiBlocks[$i] ?? new TextRun()); } catch (\Throwable $e) {}
         }
 
+        // ===== inject ATL tahun sebelumnya (bagian "sebelumnya" di dokumen) =====
+        $this->fillPrevAtlToTemplateF220($tp, $fed);
+
         /* ================= SAVE DOCX TEMP ================= */
         $tmpDir = storage_path('app/tmp');
         if (!is_dir($tmpDir)) @mkdir($tmpDir, 0775, true);
 
         $safeUnit = $this->safeFilename($unitName ?: 'Unit');
         $docxFilename = "F-220_Temuan_{$safeUnit}.docx";
-        $pdfFilename  = "F-220_Temuan_{$safeUnit}.pdf";
-
         $docxPath = $tmpDir . DIRECTORY_SEPARATOR . $docxFilename;
-        $pdfPath  = $tmpDir . DIRECTORY_SEPARATOR . $pdfFilename;
 
         if (file_exists($docxPath)) @unlink($docxPath);
-        if (file_exists($pdfPath))  @unlink($pdfPath);
 
         $tp->saveAs($docxPath);
+        abort_unless(file_exists($docxPath), 500, 'Gagal membuat DOCX.');
 
-        /* ================= CONVERT DOCX -> PDF ================= */
+        return [$docxPath, $docxFilename];
+    }
+
+    public function exportDocx(AuditFindingForm $form): BinaryFileResponse
+    {
+        [$docxPath, $docxFilename] = $this->buildDocxF220($form);
+        return response()->download($docxPath, $docxFilename)->deleteFileAfterSend(true);
+    }
+
+    public function exportPdf(AuditFindingForm $form): BinaryFileResponse
+    {
+        [$docxPath, $docxFilename] = $this->buildDocxF220($form);
+
+        $convertApiSecret = env('CONVERTAPI_SECRET');
+        abort_unless(!empty($convertApiSecret), 500, 'CONVERTAPI_SECRET belum dikonfigurasi.');
+        abort_unless(class_exists(\ZipArchive::class), 500, 'PHP Zip extension belum aktif.');
+
+        $tmpDir = storage_path('app/tmp');
+        $pdfFilename  = str_replace('.docx', '.pdf', $docxFilename);
+        $pdfPath  = $tmpDir . DIRECTORY_SEPARATOR . $pdfFilename;
+
+        if (file_exists($pdfPath))  @unlink($pdfPath);
+
         try {
             ConvertApi::setApiCredentials($convertApiSecret);
 

@@ -10,16 +10,24 @@ use App\Models\AuditFollowUpForm;
 use App\Models\SelfEvaluationForm;
 use App\Models\UserRole;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 
 class AuditFollowUpDetailController extends Controller
 {
     private const FORM_STATUS_FINAL = 'Final';
-
-    // status enum sesuai migration (case-sensitive!)
     private const STATUS_OPTIONS = ['Open', 'Toleran', 'Closed'];
 
-    /* ================= Role Helpers ================= */
+    private function normalize(?string $v): string
+    {
+        return trim((string)($v ?? ''));
+    }
+
+    private function auditeeCompleted(AuditFollowUpDetail $detail): bool
+    {
+        return $this->normalize($detail->follow_up_realization) !== ''
+            && $this->normalize($detail->effectiveness) !== '';
+    }
 
     private function currentUserRole(): ?UserRole
     {
@@ -32,7 +40,6 @@ class AuditFollowUpDetailController extends Controller
             return UserRole::where('cis_user_id', $u->cis_user_id)->where('active', 1)->first()
                 ?? UserRole::where('cis_user_id', $u->cis_user_id)->latest('created_at')->first();
         }
-
         return null;
     }
 
@@ -44,7 +51,7 @@ class AuditFollowUpDetailController extends Controller
     private function isAdmin(): bool
     {
         $u = auth()->user();
-        return (bool) $u && $u->username === 'adminspm';
+        return (bool)$u && $u->username === 'adminspm';
     }
 
     private function auditeeRoleIds(SelfEvaluationForm $fed): array
@@ -57,7 +64,7 @@ class AuditFollowUpDetailController extends Controller
             'member_auditee_2_user_role_id',
             'member_auditee_3_user_role_id',
         ] as $col) {
-            if (!empty($fed->{$col})) $candidates[] = (string) $fed->{$col};
+            if (!empty($fed->{$col})) $candidates[] = (string)$fed->{$col};
         }
 
         foreach ([
@@ -66,11 +73,11 @@ class AuditFollowUpDetailController extends Controller
             'member_auditee_2_role_id',
             'member_auditee_3_role_id',
         ] as $col) {
-            if (!empty($fed->{$col})) $candidates[] = (string) $fed->{$col};
+            if (!empty($fed->{$col})) $candidates[] = (string)$fed->{$col};
         }
 
         foreach (['created_by', 'updated_by'] as $col) {
-            if (!empty($fed->{$col})) $candidates[] = (string) $fed->{$col};
+            if (!empty($fed->{$col})) $candidates[] = (string)$fed->{$col};
         }
 
         return array_values(array_unique(array_filter($candidates)));
@@ -103,17 +110,22 @@ class AuditFollowUpDetailController extends Controller
         abort_unless($allowed, 403, 'Tidak berhak mengakses Audit Tindak Lanjut.');
     }
 
-    /* ================= Detail Update ================= */
+    private function auditActorForColumn(string $table, string $column): mixed
+    {
+        $u = auth()->user();
+        if (!$u) return null;
+        if (!Schema::hasColumn($table, $column)) return null;
 
-    /**
-     * Update 1 baris ATL.
-     * - Auditee: follow_up_realization, effectiveness
-     * - Auditor: status + status_description
-     * - Admin: semua
-     */
+        $type = Schema::getColumnType($table, $column);
+        if (in_array($type, ['integer', 'bigint', 'smallint'], true)) return $u->id;
+
+        $roleId = $this->currentUserRoleId();
+        return $roleId ?: ('u:' . (string)$u->id);
+    }
+
     public function updateRow(Request $request, AuditFollowUpForm $form, AuditFollowUpDetail $detail)
     {
-        abort_unless($detail->audit_follow_up_form_id === $form->id, 404);
+        abort_unless((string)$detail->audit_follow_up_form_id === (string)$form->id, 404);
 
         $findingForm = AuditFindingForm::findOrFail($form->audit_finding_form_id);
         $fed = SelfEvaluationForm::findOrFail($findingForm->self_evaluation_form_id);
@@ -124,55 +136,48 @@ class AuditFollowUpDetailController extends Controller
             return back()->with('warning', 'Form ATL sudah Final dan tidak dapat diubah.');
         }
 
+        // ✅ GUARD: detail yang diedit harus berasal dari findingForm tahun berjalan
+        $finding = AuditFinding::find($detail->audit_finding_id);
+        abort_unless($finding, 404, 'Temuan tidak ditemukan.');
+        abort_unless(
+            (string)$finding->audit_finding_form_id === (string)$findingForm->id,
+            403,
+            'Baris ini berasal dari ATL histori (read-only) dan tidak boleh diedit di tahun berjalan.'
+        );
+
         $myRoleId = $this->currentUserRoleId();
         $isAdmin  = $this->isAdmin();
         $isAuditor = $this->isAuditorRole($form, $myRoleId);
         $isAuditee = $this->isAuditeeRole($fed, $myRoleId);
 
-        // validasi semua field yang mungkin dikirim, tapi izin edit ditentukan setelahnya
         $data = $request->validate([
-            // auditee
             'follow_up_realization' => ['nullable', 'string'],
             'effectiveness'         => ['nullable', 'string', 'max:50'],
-
-            // auditor
-            'status'               => ['nullable', 'string', Rule::in(self::STATUS_OPTIONS)],
-            'status_description'   => ['nullable', 'string'],
+            'status'                => ['nullable', 'string', Rule::in(self::STATUS_OPTIONS)],
+            'status_description'    => ['nullable', 'string'],
         ]);
 
         $payload = [];
 
         if ($isAdmin || $isAuditee) {
-            if (array_key_exists('follow_up_realization', $data)) {
-                $payload['follow_up_realization'] = $data['follow_up_realization'];
-            }
-            if (array_key_exists('effectiveness', $data)) {
-                $payload['effectiveness'] = $data['effectiveness'];
-            }
+            if (array_key_exists('follow_up_realization', $data)) $payload['follow_up_realization'] = $data['follow_up_realization'];
+            if (array_key_exists('effectiveness', $data)) $payload['effectiveness'] = $data['effectiveness'];
         }
 
         if ($isAdmin || $isAuditor) {
-            if (array_key_exists('status', $data)) {
-                $payload['status'] = $data['status'];
+            if (!$isAdmin && $isAuditor && !$this->auditeeCompleted($detail)) {
+                return back()->with('warning', 'Auditor belum dapat mengisi Status. Tunggu Auditee menyelesaikan Realisasi & Efektivitas terlebih dahulu.');
             }
-            if (array_key_exists('status_description', $data)) {
-                $payload['status_description'] = $data['status_description'];
-            }
+            if (array_key_exists('status', $data)) $payload['status'] = $data['status'];
+            if (array_key_exists('status_description', $data)) $payload['status_description'] = $data['status_description'];
         }
 
         if (empty($payload)) {
             return back()->with('warning', 'Tidak ada perubahan yang diizinkan untuk role kamu.');
         }
 
-        // safety: pastikan audit_finding_id milik finding form yang sama
-        $finding = AuditFinding::find($detail->audit_finding_id);
-        if ($finding) {
-            abort_unless(
-                $finding->audit_finding_form_id === $findingForm->id,
-                403,
-                'Temuan tidak sesuai dengan Form Temuan.'
-            );
-        }
+        $actor = $this->auditActorForColumn('audit_follow_up_details', 'updated_by');
+        if (!is_null($actor)) $payload['updated_by'] = $actor;
 
         $detail->update($payload);
 

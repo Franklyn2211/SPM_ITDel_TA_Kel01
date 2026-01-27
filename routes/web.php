@@ -77,12 +77,18 @@ Route::prefix('auditee')
             ->name('temuan.row.update.auditee');
         Route::get('/temuan/{form}/export-pdf', [AuditFindingExportController::class, 'exportPdf'])
             ->name('temuan.exportPdf');
+        Route::get('/temuan/{form}/export-docx', [AuditFindingExportController::class, 'exportDocx'])
+            ->name('temuan.exportDocx');
 
         // ATL (auditee view + isi realisasi & efektivitas)
         Route::get('/atl', [AuditFollowUpAuditeeController::class, 'index'])->name('atl.index');
         Route::get('/atl/{atl}', [AuditFollowUpAuditeeController::class, 'show'])->name('atl.show');
         Route::put('/atl/{atl}/detail/{detail}', [AuditFollowUpAuditeeController::class, 'updateRow'])
             ->name('atl.row.update');
+        Route::get('/atl/{form}/export-pdf', [AuditFollowUpExportController::class, 'exportPdf'])
+            ->name('atl.exportPdf');
+        route::get('/atl/{form}/export-docx', [AuditFollowUpExportController::class, 'exportDocx'])
+            ->name('atl.exportDocx');
     });
 
 /*
@@ -123,6 +129,9 @@ Route::prefix('auditor')
             ->name('temuan.row.update.auditor');
         Route::get('/temuan/{form}/export-pdf', [AuditFindingExportController::class, 'exportPdf'])
             ->name('temuan.exportPdf');
+        Route::get('/temuan/{form}/export-docx', [AuditFindingExportController::class, 'exportDocx'])
+            ->name('temuan.exportDocx');
+
 
         // ATL (auditor)
         Route::get('/atl', [AuditFollowUpHeaderController::class, 'index'])->name('atl.index');
@@ -136,6 +145,7 @@ Route::prefix('auditor')
         Route::post('/atl/{form}/finalize', [AuditFollowUpHeaderController::class, 'finalize'])->name('atl.finalize');
         Route::put('/atl/{form}/detail/{detail}', [AuditFollowUpDetailController::class, 'updateRow'])->name('atl.row.update');
         Route::get('/atl/{form}/export-pdf', [AuditFollowUpExportController::class, 'exportPdf'])->name('atl.exportPdf');
+        Route::get('/atl/{form}/export-docx', [AuditFollowUpExportController::class, 'exportDocx'])->name('atl.exportDocx');
     });
 
 /*
@@ -190,6 +200,8 @@ Route::prefix('admin')
         Route::put('/ami/standard/{amiStandard}', [AmiStandardController::class, 'update'])->name('ami.standard.update');
         Route::delete('/ami/standard/{amiStandard}', [AmiStandardController::class, 'destroy'])->name('ami.standard.destroy');
         Route::post('/ami/standard/submit', [AmiStandardController::class, 'submit'])->name('ami.standard.submit');
+        Route::post('/admin/ami/standards/copy', [AmiStandardController::class, 'copyFromPrevious'])
+            ->name('ami.standard.copy');
 
         Route::get('/ami/indicator', [AmiIndicatorController::class, 'index'])->name('ami.indicator');
         Route::post('/ami/indicator', [AmiIndicatorController::class, 'store'])->name('ami.indicator.store');

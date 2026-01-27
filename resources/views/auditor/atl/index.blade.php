@@ -69,6 +69,7 @@
           </tr>
         </thead>
         <tbody>
+        @php $start = ($forms->currentPage() - 1) * $forms->perPage(); @endphp
         @forelse($forms as $i => $form)
           @php
             $fed  = $form->selfEvaluationForm;
@@ -79,10 +80,9 @@
             $atlStatus = $atl?->status;
           @endphp
           <tr>
-            <td>{{ $i + 1 }}</td>
+            <td>{{ $start + $i + 1 }}</td>
             <td>
               <div class="fw-semibold">{{ $unit }}</div>
-              <div class="text-muted fs-sm">Form Temuan: {{ $form->id }}</div>
             </td>
             <td>{{ $acad }}</td>
             <td><span class="badge bg-success">Final</span></td>
@@ -106,6 +106,9 @@
         @endforelse
         </tbody>
       </table>
+    </div>
+    <div class="card-footer border-top-0">
+      {{ $forms->onEachSide(1)->links('pagination::bootstrap-5') }}
     </div>
   </div>
 

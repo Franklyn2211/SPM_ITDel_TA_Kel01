@@ -33,7 +33,8 @@ class AuditFindingHeaderController extends Controller
     private function currentUserRole(): ?UserRole
     {
         $u = auth()->user();
-        if (!$u) return null;
+        if (!$u)
+            return null;
 
         // kalau user sudah punya pointer ke user_role_id
         if (!empty($u->user_role_id)) {
@@ -75,17 +76,18 @@ class AuditFindingHeaderController extends Controller
     {
         // lebih aman: cek status_id langsung, bukan ngandelin relation "status" selalu terload
         $approvedId = $this->fedApprovedStatusId();
-        abort_unless($approvedId, 500, 'Status FED "Disetujui" tidak ditemukan.');
+        abort_unless((bool) $approvedId, 500, 'Status FED "Disetujui" tidak ditemukan.');
 
         abort_unless((string) $fed->status_id === (string) $approvedId, 403, 'FED belum Disetujui.');
     }
 
     private function ensureUserCanAccessForm(AuditFindingForm $form): void
     {
-        if ($this->isAdmin()) return;
+        if ($this->isAdmin())
+            return;
 
         $myRoleId = $this->currentUserRoleId();
-        abort_unless($myRoleId, 403, 'User role tidak ditemukan.');
+        abort_unless((bool) $myRoleId, 403, 'User role tidak ditemukan.');
 
         $allowed = in_array($myRoleId, [
             $form->auditor_user_role_id,
@@ -97,10 +99,11 @@ class AuditFindingHeaderController extends Controller
 
     private function ensureLeaderOrAdmin(AuditFindingForm $form): void
     {
-        if ($this->isAdmin()) return;
+        if ($this->isAdmin())
+            return;
 
         $myRoleId = $this->currentUserRoleId();
-        abort_unless($myRoleId, 403, 'User role tidak ditemukan.');
+        abort_unless((bool) $myRoleId, 403, 'User role tidak ditemukan.');
 
         abort_unless(
             (string) $form->auditor_user_role_id === (string) $myRoleId,
@@ -144,14 +147,16 @@ class AuditFindingHeaderController extends Controller
             ->orderBy('ami_standard_indicator_id')
             ->pluck('id');
 
-        if ($detailIds->isEmpty()) return;
+        if ($detailIds->isEmpty())
+            return;
 
         $existing = AuditFinding::where('audit_finding_form_id', $form->id)
             ->where('active', 1)
             ->pluck('self_evaluation_detail_id');
 
         $missing = $detailIds->diff($existing);
-        if ($missing->isEmpty()) return;
+        if ($missing->isEmpty())
+            return;
 
         $maxNo = (int) AuditFinding::where('audit_finding_form_id', $form->id)->max('finding_no');
 
@@ -171,25 +176,30 @@ class AuditFindingHeaderController extends Controller
 
     public function index(Request $request)
     {
-        $academicId = $this->activeAcademicId();
-        abort_unless($academicId, 403, 'Tahun akademik aktif belum diset.');
+        // Ambil semua tahun akademik, prodi/unit, dan status untuk filter
+        $academicOptions = \App\Models\AcademicConfig::orderByDesc('created_at')->get();
+        $prodiOptions = \App\Models\RefCategoryDetail::orderBy('name')->get();
+        $statusOptions = \App\Models\EvaluationStatus::orderBy('name')->get();
 
-        $approvedId = $this->fedApprovedStatusId();
-        abort_unless($approvedId, 500, 'Status FED "Disetujui" tidak ditemukan.');
-
+        $academicId = $request->query('academic_id');
+        $prodiId = $request->query('prodi_id');
+        $statusId = $request->query('status_id');
         $q = trim((string) $request->query('q', ''));
 
-        $feds = SelfEvaluationForm::with(['categoryDetail', 'status'])
-            ->where('academic_config_id', $academicId)
+        $feds = SelfEvaluationForm::with(['categoryDetail', 'status', 'academicConfig'])
             ->where('active', 1)
-            ->where('status_id', $approvedId)
+            ->when($academicId, fn($qq) => $qq->where('academic_config_id', $academicId))
+            ->when($prodiId, fn($qq) => $qq->where('category_detail_id', $prodiId))
+            ->when($statusId, fn($qq) => $qq->where('status_id', $statusId))
             ->when($q !== '', function ($qq) use ($q) {
                 $qq->whereHas('categoryDetail', fn($x) => $x->where('name', 'like', "%{$q}%"));
             })
+            ->orderByDesc('academic_config_id')
             ->orderBy('category_detail_id')
-            ->get();
+            ->paginate(10)
+            ->withQueryString();
 
-        return view('auditor.temuan.index', compact('feds', 'q'));
+        return view('auditor.temuan.index', compact('feds', 'q', 'academicOptions', 'prodiOptions', 'statusOptions', 'academicId', 'prodiId', 'statusId'));
     }
 
     /* ================= Show ================= */
@@ -202,7 +212,7 @@ class AuditFindingHeaderController extends Controller
         $this->ensureFedApproved($fed);
 
         $myRoleId = $this->currentUserRoleId();
-        abort_unless($myRoleId, 403, 'User role tidak ditemukan.');
+        abort_unless((bool) $myRoleId, 403, 'User role tidak ditemukan.');
 
         $form = null;
 
@@ -240,17 +250,17 @@ class AuditFindingHeaderController extends Controller
         ]);
 
         $rows = AuditFinding::with([
-                'selfEvaluationDetail.standardAchievement',
-                'selfEvaluationDetail.indicator.standard',
-                'selfEvaluationDetail.indicator.pics.role',
-            ])
+            'selfEvaluationDetail.standardAchievement',
+            'selfEvaluationDetail.indicator.standard',
+            'selfEvaluationDetail.indicator.pics.role',
+        ])
             ->where('audit_finding_form_id', $form->id)
             ->where('active', 1)
             ->orderBy('finding_no')
             ->get();
 
         $rowsPositive = $rows->filter(fn($r) => !$this->isNegativeFromRow($r))->values();
-        $rowsNegative = $rows->filter(fn($r) =>  $this->isNegativeFromRow($r))->values();
+        $rowsNegative = $rows->filter(fn($r) => $this->isNegativeFromRow($r))->values();
 
         $total = $rows->count();
         $complete = $rows->filter(fn($r) => $this->isRowComplete($r, $this->isNegativeFromRow($r)))->count();
@@ -336,8 +346,8 @@ class AuditFindingHeaderController extends Controller
             ->when($q !== '', function ($qq) use ($q) {
                 $qq->whereHas('user', function ($u) use ($q) {
                     $u->where('name', 'like', "%{$q}%")
-                    ->orWhere('email', 'like', "%{$q}%")
-                    ->orWhere('username', 'like', "%{$q}%");
+                        ->orWhere('email', 'like', "%{$q}%")
+                        ->orWhere('username', 'like', "%{$q}%");
                 });
             })
             ->orderByDesc('created_at')

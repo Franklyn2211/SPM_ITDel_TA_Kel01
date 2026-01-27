@@ -60,12 +60,12 @@
         </a>
 
         <div class="dropdown-menu dropdown-menu-end">
-          <a href="#" class="dropdown-item">
+          {{-- <a href="#" class="dropdown-item">
             <i class="ph-user-circle me-2"></i> My profile
           </a>
           <a href="#" class="dropdown-item">
             <i class="ph-gear me-2"></i> Account settings
-          </a>
+          </a> --}}
           <div class="dropdown-divider"></div>
 
           <form method="POST" action="{{ route('logout') }}">

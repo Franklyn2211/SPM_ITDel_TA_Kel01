@@ -50,11 +50,20 @@
             <i class="ph-clock-counter-clockwise me-2"></i> Kembali ke Tahun Aktif
           </a>
         @else
-          <a href="{{ route('admin.ami.standard', ['history' => 1]) }}" class="btn btn-outline-secondary btn-sm rounded-pill">
+          {{-- <a href="{{ route('admin.ami.standard', ['history' => 1]) }}" class="btn btn-outline-secondary btn-sm rounded-pill">
             <i class="ph-clock-afternoon me-2"></i> Riwayat
-          </a>
+          </a> --}}
         @endif
 
+        {{-- Tambahkan ini di bagian tombol header, hanya saat TA aktif (bukan history) --}}
+        @unless($isHistory)
+        <button type="button"
+                class="btn btn-outline-primary btn-sm rounded-pill"
+                data-bs-toggle="modal"
+                data-bs-target="#modalCopyPrev">
+            <i class="ph-copy me-2"></i> Copy dari TA Sebelumnya
+        </button>
+        @endunless
       </div>
     </div>
   </div>
@@ -367,4 +376,43 @@
     </div>
   </div>
   </div>
+  {{-- Modal: Copy dari TA Sebelumnya --}}
+<div class="modal fade" id="modalCopyPrev" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <form method="POST" action="{{ route('admin.ami.standard.copy') }}" class="modal-content">
+      @csrf
+      <div class="modal-header">
+        <h5 class="modal-title">Copy Standar dari TA Sebelumnya</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+
+      <div class="modal-body">
+        <p class="mb-2">
+          Ini akan menyalin <strong>Standar + Indikator + PIC</strong> dari Tahun Akademik sebelumnya (non-aktif paling baru)
+          ke Tahun Akademik aktif.
+        </p>
+
+        <div class="alert alert-warning border-0 mb-0">
+          Kalau TA aktif sudah punya standar, copy akan ditolak.
+          Kalau mau “timpa”, aktifkan opsi <strong>Force</strong>.
+        </div>
+
+        <div class="form-check mt-3">
+          <input class="form-check-input" type="checkbox" name="force" value="1" id="chkForceCopy">
+          <label class="form-check-label" for="chkForceCopy">
+            Force (hapus dulu standar TA aktif lalu copy ulang)
+          </label>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Batal</button>
+        <button type="submit" class="btn btn-primary">
+          <i class="ph-copy me-2"></i> Copy Sekarang
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
 @endsection

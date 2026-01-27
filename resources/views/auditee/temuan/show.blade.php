@@ -31,6 +31,9 @@
 
         @if($isFinal)
             <a class="btn btn-primary btn-sm rounded-pill"
+                href="{{ route('auditee.temuan.exportDocx', $form->id) }}">
+            <i class="ph-download-simple me-1"></i> Unduh DOCX
+            <a class="btn btn-primary btn-sm rounded-pill"
              href="{{ route('auditee.temuan.exportPdf', $form->id) }}">
             <i class="ph-download-simple me-1"></i> Unduh PDF
           </a>
@@ -277,114 +280,130 @@
   </div>
 
   {{-- NEGATIF --}}
-  <div class="card">
-    <div class="card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
-      <h5 class="mb-0">2) Temuan Negatif / Praktik Buruk</h5>
-      @if($isFinal)
-        <span class="badge bg-success rounded-pill">
-          <i class="ph-lock me-1"></i> Form sudah Final (read-only)
-        </span>
-      @endif
-    </div>
+<div class="card">
+  <div class="card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
+    <h5 class="mb-0">2) Temuan Negatif / Praktik Buruk</h5>
 
-    <div class="table-responsive">
-      <table class="table table-hover align-top mb-0">
-        <thead class="table-light">
-          <tr>
-            <th class="text-center" style="width:60px;">No</th>
-            <th style="min-width:420px;">Standar & Butir Mutu</th>
-            <th style="min-width:320px;">Hasil Pelaksanaan (FED)</th>
-            <th style="min-width:220px;">Faktor Penghambat (FED)</th>
-            <th style="min-width:180px;">PIC Indikator (Role)</th>
-            <th style="width:170px;" class="text-center">Kategori Temuan</th>
-            <th style="width:140px;" class="text-center">Jadwal</th>
-            <th style="width:140px;" class="text-center">Status</th>
-            <th style="width:200px;">Aksi</th>
-          </tr>
-        </thead>
+    @if($isFinal)
+      <span class="badge bg-success rounded-pill">
+        <i class="ph-lock me-1"></i> Form sudah Final (read-only)
+      </span>
+    @endif
+  </div>
 
-        <tbody>
-          @forelse($rowsNegative as $r)
-            @php
-              $stdName = $r->selfEvaluationDetail?->indicator?->standard?->name ?? 'Standar';
-              $rawIndHtml = $r->selfEvaluationDetail?->indicator?->description ?? '';
+  <div class="table-responsive">
+    <table class="table table-hover align-top mb-0">
+      <thead class="table-light">
+        <tr>
+          <th class="text-center" style="width:60px;">No</th>
+          <th style="min-width:420px;">Standar & Butir Mutu</th>
+          <th style="min-width:320px;">Hasil Pelaksanaan (FED)</th>
+          <th style="min-width:220px;">Faktor Penghambat (FED)</th>
+          <th style="min-width:180px;">PIC Indikator (Role)</th>
+          <th style="width:170px;" class="text-center">Kategori Temuan (Auditor)</th>
+          <th style="width:140px;" class="text-center">Jadwal</th>
+          <th style="width:140px;" class="text-center">Status</th>
+          <th style="width:220px;">Aksi</th>
+        </tr>
+      </thead>
 
-              $plainInd = trim(preg_replace('/\s+/', ' ', strip_tags($rawIndHtml)));
-              $shortInd = \Illuminate\Support\Str::limit($plainInd, 220);
+      <tbody>
+        @forelse($rowsNegative as $r)
+          @php
+            $stdName = $r->selfEvaluationDetail?->indicator?->standard?->name ?? 'Standar';
+            $rawIndHtml = $r->selfEvaluationDetail?->indicator?->description ?? '';
 
-              $fedResult = $r->selfEvaluationDetail?->result ?? '';
-              $fedFactors = $r->selfEvaluationDetail?->contributing_factors ?? '';
+            $plainInd = trim(preg_replace('/\s+/', ' ', strip_tags($rawIndHtml)));
+            $shortInd = \Illuminate\Support\Str::limit($plainInd, 220);
 
-              $picsRole = collect($r->selfEvaluationDetail?->indicator?->pics ?? [])
-                ->map(fn($p) => $p->role?->name ?? null)
-                ->filter()
-                ->unique()
-                ->values()
-                ->implode(', ');
-              $picsRole = $picsRole ?: '-';
+            $fedResult  = $r->selfEvaluationDetail?->result ?? '';
+            $fedFactors = $r->selfEvaluationDetail?->contributing_factors ?? '';
 
-              $severityLabel = $r->severity ? ($severityOptions[$r->severity] ?? $r->severity) : null;
+            $picsRole = collect($r->selfEvaluationDetail?->indicator?->pics ?? [])
+              ->map(fn($p) => $p->role?->name ?? null)
+              ->filter()
+              ->unique()
+              ->values()
+              ->implode(', ');
+            $picsRole = $picsRole ?: '-';
 
-              // NEGATIF auditee wajib: due_date + corrective_action_plan
-              $complete = $isFilled($r->corrective_action_plan) && !is_null($r->due_date);
-              $badgeRow = $complete ? 'bg-success' : 'bg-secondary';
-              $statusText = $complete ? 'Lengkap' : 'Draft';
-              $rowNo = $r->finding_no ?? $loop->iteration;
-            @endphp
+            $severityLabel = $r->severity ? ($severityOptions[$r->severity] ?? $r->severity) : null;
 
-            <tr>
-              <td class="text-center">{{ $rowNo }}</td>
+            // ========= GATE: AUDITEE HARUS NUNGGU AUDITOR =========
+            $auditorReady = $isFilled($r->severity) && $isFilled($r->auditor_recommendation);
 
-              <td>
-                <div class="fw-semibold">{{ $stdName }}</div>
-                <div class="text-muted fs-sm mt-1">{{ $shortInd ?: '-' }}</div>
+            // NEGATIF auditee wajib: due_date + corrective_action_plan
+            $auditeeComplete = $isFilled($r->corrective_action_plan) && !is_null($r->due_date);
 
-                <button type="button"
-                        class="btn btn-link p-0 fs-sm mt-1"
-                        data-bs-toggle="modal"
-                        data-bs-target="#modalDesc"
-                        data-title="{{ e($stdName) }}"
-                        data-desc-html="{{ base64_encode($rawIndHtml) }}">
-                  Lihat indikator lengkap
-                </button>
-              </td>
+            $badgeRow   = $auditeeComplete ? 'bg-success' : 'bg-secondary';
+            $statusText = $auditeeComplete ? 'Lengkap' : 'Draft';
 
-              <td class="fs-sm">
-                <div class="text-muted fs-sm mb-1">Hasil Pelaksanaan</div>
-                <div class="border rounded p-2" style="white-space: normal;">
-                  {!! $fedResult ?: '<span class="text-muted">-</span>' !!}
-                </div>
-              </td>
+            $rowNo = $r->finding_no ?? $loop->iteration;
 
-              <td class="fs-sm">
-                <div class="text-muted fs-sm mb-1">Faktor Penghambat</div>
-                <div class="border rounded p-2" style="white-space: normal;">
-                  {!! $fedFactors ?: '<span class="text-muted">-</span>' !!}
-                </div>
-              </td>
+            // kalau auditor belum siap, tampilkan row "locked" (opsional)
+            $rowMuted = !$auditorReady ? 'opacity-75' : '';
+          @endphp
 
-              <td class="fs-sm">
-                <div class="text-muted fs-sm mb-1">PIC Indikator</div>
-                <div>{{ $picsRole }}</div>
-              </td>
+          <tr class="{{ $rowMuted }}">
+            <td class="text-center">{{ $rowNo }}</td>
 
-              <td class="text-center">
-                <span class="badge {{ $r->severity ? 'bg-danger' : 'bg-secondary' }} rounded-pill">
-                  {{ $severityLabel ?? '—' }}
-                </span>
-              </td>
+            <td>
+              <div class="fw-semibold">{{ $stdName }}</div>
+              <div class="text-muted fs-sm mt-1">{{ $shortInd ?: '-' }}</div>
 
-              <td class="text-center">
-                {{ $r->due_date ? \Carbon\Carbon::parse($r->due_date)->format('d/m/Y') : '—' }}
-              </td>
+              <button type="button"
+                      class="btn btn-link p-0 fs-sm mt-1"
+                      data-bs-toggle="modal"
+                      data-bs-target="#modalDesc"
+                      data-title="{{ e($stdName) }}"
+                      data-desc-html="{{ base64_encode($rawIndHtml) }}">
+                Lihat indikator lengkap
+              </button>
+            </td>
 
-              <td class="text-center">
-                <span class="badge {{ $badgeRow }} rounded-pill">{{ $statusText }}</span>
-              </td>
+            <td class="fs-sm">
+              <div class="text-muted fs-sm mb-1">Hasil Pelaksanaan</div>
+              <div class="border rounded p-2" style="white-space: normal;">
+                {!! $fedResult ?: '<span class="text-muted">-</span>' !!}
+              </div>
+            </td>
 
-              <td>
-                @if($isFinal)
-                  <div class="text-muted fs-sm">Terkunci.</div>
+            <td class="fs-sm">
+              <div class="text-muted fs-sm mb-1">Faktor Penghambat</div>
+              <div class="border rounded p-2" style="white-space: normal;">
+                {!! $fedFactors ?: '<span class="text-muted">-</span>' !!}
+              </div>
+            </td>
+
+            <td class="fs-sm">
+              <div class="text-muted fs-sm mb-1">PIC Indikator</div>
+              <div>{{ $picsRole }}</div>
+            </td>
+
+            <td class="text-center">
+              @if($auditorReady)
+                <span class="badge bg-danger rounded-pill">{{ $severityLabel ?? '—' }}</span>
+              @else
+                <span class="badge bg-secondary rounded-pill">Menunggu Auditor</span>
+              @endif
+            </td>
+
+            <td class="text-center">
+              {{ $r->due_date ? \Carbon\Carbon::parse($r->due_date)->format('d/m/Y') : '—' }}
+            </td>
+
+            <td class="text-center">
+              <span class="badge {{ $badgeRow }} rounded-pill">{{ $statusText }}</span>
+            </td>
+
+            <td>
+              @if($isFinal)
+                <div class="text-muted fs-sm">Terkunci.</div>
+              @else
+                @if(!$auditorReady)
+                  <div class="text-muted fs-sm">
+                    Auditor belum mengisi <b>kategori</b> & <b>rekomendasi</b>. Auditee belum bisa isi.
+                  </div>
                 @else
                   <button type="button"
                           class="btn btn-sm btn-primary"
@@ -411,17 +430,18 @@
                     <i class="ph-pencil-simple me-1"></i> Isi/Edit
                   </button>
                 @endif
-              </td>
-            </tr>
-          @empty
-            <tr>
-              <td colspan="9" class="text-center text-muted py-4">Tidak ada temuan negatif.</td>
-            </tr>
-          @endforelse
-        </tbody>
-      </table>
-    </div>
+              @endif
+            </td>
+          </tr>
+        @empty
+          <tr>
+            <td colspan="9" class="text-center text-muted py-4">Tidak ada temuan negatif.</td>
+          </tr>
+        @endforelse
+      </tbody>
+    </table>
   </div>
+</div>
 
 </div>
 

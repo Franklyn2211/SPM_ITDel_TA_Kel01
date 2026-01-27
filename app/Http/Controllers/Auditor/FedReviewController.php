@@ -32,7 +32,8 @@ class FedReviewController extends Controller
             })
             ->orderBy('category_detail_id')
             ->orderBy('updated_at', 'desc')
-            ->get();
+            ->paginate(10)
+            ->withQueryString();
 
         return view('auditor.fed.index', compact('forms'));
     }
@@ -50,12 +51,12 @@ class FedReviewController extends Controller
         $filterStatus = request('status');
 
         $detailsQuery = SelfEvaluationDetail::with([
-                'indicator.standard',
-                'status',
-                'standardAchievement',
-                'auditChecklists',
-                'indicator'
-            ])
+            'indicator.standard',
+            'status',
+            'standardAchievement',
+            'auditChecklists',
+            'indicator'
+        ])
             ->where('self_evaluation_form_id', $form->id)
             ->orderBy('ami_standard_indicator_id');
 
@@ -88,10 +89,10 @@ class FedReviewController extends Controller
         }
 
         $approvedStatusId = EvaluationStatus::where('name', 'Disetujui')->value('id');
-        $draftStatusId    = EvaluationStatus::where('name', 'Draft')->value('id');
+        $draftStatusId = EvaluationStatus::where('name', 'Draft')->value('id');
         $rejectedStatusId = EvaluationStatus::where('name', 'Ditolak')->value('id');
 
-        $detail->status_id  = $approvedStatusId;
+        $detail->status_id = $approvedStatusId;
         $detail->updated_by = Auth::user()->userRole->id ?? null;
         $detail->save();
 
@@ -112,9 +113,9 @@ class FedReviewController extends Controller
 
         $rejectedStatusId = EvaluationStatus::where('name', 'Ditolak')->value('id');
         $approvedStatusId = EvaluationStatus::where('name', 'Disetujui')->value('id');
-        $draftStatusId    = EvaluationStatus::where('name', 'Draft')->value('id');
+        $draftStatusId = EvaluationStatus::where('name', 'Draft')->value('id');
 
-        $detail->status_id  = $rejectedStatusId;
+        $detail->status_id = $rejectedStatusId;
         $detail->updated_by = Auth::user()->userRole->id ?? null;
         $detail->save();
 
@@ -152,11 +153,11 @@ class FedReviewController extends Controller
         }
 
         $approvedStatusId = EvaluationStatus::where('name', 'Disetujui')->value('id');
-        $draftStatusId    = EvaluationStatus::where('name', 'Draft')->value('id');
+        $draftStatusId = EvaluationStatus::where('name', 'Draft')->value('id');
         $rejectedStatusId = EvaluationStatus::where('name', 'Ditolak')->value('id');
 
         // Normalisasi URL (biar user yang ngetik drive.google.com gak bikin kacau)
-        $evidenceUrl = trim((string)($data['bukti_pendukung'] ?? ''));
+        $evidenceUrl = trim((string) ($data['bukti_pendukung'] ?? ''));
         if ($evidenceUrl !== '' && !preg_match('~^https?://~i', $evidenceUrl)) {
             $evidenceUrl = 'https://' . $evidenceUrl;
         }
@@ -169,7 +170,7 @@ class FedReviewController extends Controller
         $col = self::EVIDENCE_URL_COLUMN;
         $detail->{$col} = $evidenceUrl !== '' ? $evidenceUrl : null;
 
-        $detail->status_id  = $approvedStatusId;
+        $detail->status_id = $approvedStatusId;
         $detail->updated_by = Auth::user()->userRole->id ?? null;
         $detail->save();
 
@@ -185,22 +186,43 @@ class FedReviewController extends Controller
     {
         $form = SelfEvaluationForm::findOrFail($formId);
 
-        $details = SelfEvaluationDetail::where('self_evaluation_form_id', $formId)->get();
-        $total   = $details->count();
+        // Hitung hanya detail yang valid (indikator aktif + standar aktif + sesuai academic config form)
+        $base = SelfEvaluationDetail::query()
+            ->where('self_evaluation_form_id', $formId)
+            ->whereHas('indicator', function ($q) use ($form) {
+                $q->where('ami_standard_indicators.active', 1)
+                ->whereExists(function ($qq) use ($form) {
+                    $qq->select(DB::raw(1))
+                        ->from('ami_standards as s')
+                        ->whereColumn('s.id', 'ami_standard_indicators.standard_id')
+                        ->where('s.active', 1)
+                        ->where('s.academic_config_id', $form->academic_config_id);
+                });
+            });
 
-        $approved = $details->where('status_id', $approvedStatusId)->count();
-        $rejected = $details->where('status_id', $rejectedStatusId)->count();
+        $total = (clone $base)->count();
 
-        if ($total > 0 && $approved === $total) {
-            $form->status_id = $approvedStatusId;
-        } elseif ($total > 0 && $rejected === $total) {
-            $form->status_id = $rejectedStatusId;
-        } else {
+        if ($total === 0) {
+            // Kalau tidak ada indikator valid, paling aman set Draft (atau sesuaikan rule kampusmu)
             $form->status_id = $draftStatusId;
+            $form->save();
+            return;
+        }
+
+        $approved = (clone $base)->where('status_id', $approvedStatusId)->count();
+        $rejected = (clone $base)->where('status_id', $rejectedStatusId)->count();
+
+        if ($approved === $total) {
+            $form->status_id = $approvedStatusId;   // semua diterima -> Disetujui
+        } elseif ($rejected === $total) {
+            $form->status_id = $rejectedStatusId;   // semua ditolak -> Ditolak
+        } else {
+            $form->status_id = $draftStatusId;      // campuran -> Draft
         }
 
         $form->save();
     }
+
 
     public function exportPdf(Request $request, SelfEvaluationForm $form): BinaryFileResponse
     {
@@ -249,7 +271,7 @@ class FedReviewController extends Controller
         $tp = new TemplateProcessor($templateAbsPath);
 
         // ==== HEADER ====
-        $taName   = optional($form->academicConfig)->name ?? '';
+        $taName = optional($form->academicConfig)->name ?? '';
         $unitName = optional($form->categoryDetail)->name ?? '';
 
         $ketua = trim(($form->head_auditee_position ?? '') . ' / ' . ($form->head_auditee_name ?? ''), ' /');
@@ -282,7 +304,8 @@ class FedReviewController extends Controller
 
         $parseHtmlToTextRun = function (TextRun $run, ?string $html) {
             $html = $html ?? '';
-            if (trim($html) === '') return;
+            if (trim($html) === '')
+                return;
 
             $dom = new \DOMDocument();
             $html = mb_convert_encoding($html, 'HTML-ENTITIES', 'UTF-8');
@@ -299,19 +322,25 @@ class FedReviewController extends Controller
             $traverse = function ($node, $style = [], $listContext = []) use (&$traverse, $run) {
                 if ($node->nodeType === XML_TEXT_NODE) {
                     $text = $node->textContent;
-                    if ($text !== '') $run->addText($text, $style);
+                    if ($text !== '')
+                        $run->addText($text, $style);
                     return;
                 }
-                if ($node->nodeType !== XML_ELEMENT_NODE) return;
+                if ($node->nodeType !== XML_ELEMENT_NODE)
+                    return;
 
                 $tag = strtolower($node->nodeName);
 
-                if ($tag === 'b' || $tag === 'strong') $style['bold'] = true;
-                elseif ($tag === 'i' || $tag === 'em') $style['italic'] = true;
-                elseif ($tag === 'u') $style['underline'] = 'single';
+                if ($tag === 'b' || $tag === 'strong')
+                    $style['bold'] = true;
+                elseif ($tag === 'i' || $tag === 'em')
+                    $style['italic'] = true;
+                elseif ($tag === 'u')
+                    $style['underline'] = 'single';
 
                 if ($tag === 'p' || $tag === 'div') {
-                    if ($node->previousSibling) $run->addTextBreak();
+                    if ($node->previousSibling)
+                        $run->addTextBreak();
                 }
                 if ($tag === 'br') {
                     $run->addTextBreak();
@@ -338,9 +367,12 @@ class FedReviewController extends Controller
 
                     $marker = '• ';
                     if ($lType !== 'ul') {
-                        if ($lType === 'a') $marker = chr(96 + (($idx - 1) % 26 + 1)) . '. ';
-                        elseif ($lType === 'A') $marker = chr(64 + (($idx - 1) % 26 + 1)) . '. ';
-                        else $marker = "{$idx}. ";
+                        if ($lType === 'a')
+                            $marker = chr(96 + (($idx - 1) % 26 + 1)) . '. ';
+                        elseif ($lType === 'A')
+                            $marker = chr(64 + (($idx - 1) % 26 + 1)) . '. ';
+                        else
+                            $marker = "{$idx}. ";
                     }
 
                     $run->addTextBreak();
@@ -348,7 +380,8 @@ class FedReviewController extends Controller
                     $indentStr = str_repeat($nbsp . $nbsp . $nbsp, $depth);
                     $run->addText($indentStr . $marker, $style);
 
-                    foreach ($node->childNodes as $child) $traverse($child, $style, $listContext);
+                    foreach ($node->childNodes as $child)
+                        $traverse($child, $style, $listContext);
                     return;
                 }
 
@@ -362,7 +395,8 @@ class FedReviewController extends Controller
                     }
                 }
 
-                foreach ($node->childNodes as $child) $traverse($child, $style, $listContext);
+                foreach ($node->childNodes as $child)
+                    $traverse($child, $style, $listContext);
             };
 
             $traverse($container);
@@ -393,7 +427,7 @@ class FedReviewController extends Controller
             $resRun = new TextRun();
             $parseHtmlToTextRun($resRun, $d->result ?? '');
 
-            $evidenceUrl = trim((string)($d->{$evidenceCol} ?? ''));
+            $evidenceUrl = trim((string) ($d->{$evidenceCol} ?? ''));
             if ($evidenceUrl !== '') {
                 $resRun->addTextBreak();
                 $resRun->addText('Bukti: ', ['bold' => true]);
@@ -433,9 +467,12 @@ class FedReviewController extends Controller
 
         foreach ($rows as $idx => $_) {
             $i = $idx + 1;
-            if (isset($standarBlocks[$i])) $tp->setComplexBlock("standar#{$i}", $standarBlocks[$i]);
-            if (isset($hasilBlocks[$i]))   $tp->setComplexBlock("hasil#{$i}", $hasilBlocks[$i]);
-            if (isset($faktorBlocks[$i]))  $tp->setComplexBlock("faktor#{$i}", $faktorBlocks[$i]);
+            if (isset($standarBlocks[$i]))
+                $tp->setComplexBlock("standar#{$i}", $standarBlocks[$i]);
+            if (isset($hasilBlocks[$i]))
+                $tp->setComplexBlock("hasil#{$i}", $hasilBlocks[$i]);
+            if (isset($faktorBlocks[$i]))
+                $tp->setComplexBlock("faktor#{$i}", $faktorBlocks[$i]);
         }
 
         // ==== SAVE TEMP DOCX ====
@@ -447,16 +484,19 @@ class FedReviewController extends Controller
 
         $safeUnit = $safe($unitName ?: 'Unit');
         $docxFilename = "F-219_Formulir_Evaluasi_Diri_{$safeUnit}.docx";
-        $pdfFilename  = "F-219_Formulir_Evaluasi_Diri_{$safeUnit}.pdf";
+        $pdfFilename = "F-219_Formulir_Evaluasi_Diri_{$safeUnit}.pdf";
 
         $tmpDir = storage_path('app/tmp');
-        if (!is_dir($tmpDir)) @mkdir($tmpDir, 0775, true);
+        if (!is_dir($tmpDir))
+            @mkdir($tmpDir, 0775, true);
 
         $docxPath = rtrim($tmpDir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $docxFilename;
-        $pdfPath  = rtrim($tmpDir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $pdfFilename;
+        $pdfPath = rtrim($tmpDir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $pdfFilename;
 
-        if (file_exists($docxPath)) @unlink($docxPath);
-        if (file_exists($pdfPath))  @unlink($pdfPath);
+        if (file_exists($docxPath))
+            @unlink($docxPath);
+        if (file_exists($pdfPath))
+            @unlink($pdfPath);
 
         $tp->saveAs($docxPath);
 
@@ -477,14 +517,17 @@ class FedReviewController extends Controller
                 }
             }
 
-            if (file_exists($docxPath)) @unlink($docxPath);
+            if (file_exists($docxPath))
+                @unlink($docxPath);
 
             abort_unless(file_exists($pdfPath), 500, 'Gagal mengkonversi dokumen ke PDF.');
 
             return response()->download($pdfPath, $pdfFilename)->deleteFileAfterSend(true);
         } catch (\Throwable $e) {
-            if (file_exists($docxPath)) @unlink($docxPath);
-            if (file_exists($pdfPath))  @unlink($pdfPath);
+            if (file_exists($docxPath))
+                @unlink($docxPath);
+            if (file_exists($pdfPath))
+                @unlink($pdfPath);
             abort(500, 'Gagal export PDF: ' . $e->getMessage());
         }
     }

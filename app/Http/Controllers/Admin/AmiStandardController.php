@@ -3,8 +3,11 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\AcademicConfig;
 use App\Models\AmiStandard;
 use App\Models\AmiStandardIndicator;
+use App\Models\AmiStandardIndicatorPic;
+use DB;
 use Illuminate\Http\Request;
 
 class AmiStandardController extends Controller
@@ -130,5 +133,157 @@ class AmiStandardController extends Controller
         return redirect()
             ->route('admin.ami.standard')
             ->with('success', 'Standar AMI berhasil dihapus.');
+    }
+
+    public function copyFromPrevious(Request $request)
+    {
+        // Target = Tahun Akademik yang aktif sekarang
+        $targetAc = AcademicConfig::query()
+            ->where('active', true)
+            ->orderByDesc('academic_code')
+            ->orderByDesc('created_at')
+            ->first();
+
+        if (!$targetAc) {
+            return redirect()
+                ->route('admin.ami.standard')
+                ->with('error', 'Tidak ada Tahun Akademik aktif. Aktifkan TA terlebih dahulu.');
+        }
+
+        // Source = TA non-aktif paling baru (atau bisa ditentukan lewat request)
+        $sourceAcId = $request->input('source_academic_config_id');
+
+        $sourceAc = $sourceAcId
+            ? AcademicConfig::query()->where('id', $sourceAcId)->first()
+            : AcademicConfig::query()
+                ->where('active', false)
+                ->orderByDesc('academic_code')
+                ->orderByDesc('created_at')
+                ->first();
+
+        if (!$sourceAc) {
+            return redirect()
+                ->route('admin.ami.standard')
+                ->with('error', 'Tidak ada Tahun Akademik sebelumnya (non-aktif) untuk dicopy.');
+        }
+
+        if ((string) $sourceAc->id === (string) $targetAc->id) {
+            return redirect()
+                ->route('admin.ami.standard')
+                ->with('error', 'TA sumber sama dengan TA aktif. Pilih TA sumber yang non-aktif.');
+        }
+
+        // Cegah duplikasi: kalau TA aktif sudah punya standar, jangan copy lagi kecuali force=1
+        $force = $request->boolean('force', false);
+
+        $alreadyHasStandards = AmiStandard::query()
+            ->where('academic_config_id', $targetAc->id)
+            ->exists();
+
+        if ($alreadyHasStandards && !$force) {
+            return redirect()
+                ->route('admin.ami.standard')
+                ->with('error', 'TA aktif sudah memiliki standar. Hapus dulu atau gunakan mode force untuk copy ulang.');
+        }
+
+        // Ambil semua standar dari TA sumber beserta indikator + PIC
+        $sourceStandards = AmiStandard::query()
+            ->where('academic_config_id', $sourceAc->id)
+            ->with(['indicators.pics'])
+            ->orderBy('id')
+            ->get();
+
+        if ($sourceStandards->isEmpty()) {
+            return redirect()
+                ->route('admin.ami.standard')
+                ->with('error', 'TA sumber tidak punya standar untuk dicopy.');
+        }
+
+        $createdStandards = 0;
+        $createdIndicators = 0;
+        $createdPics = 0;
+
+        DB::transaction(function () use (
+            $force,
+            $targetAc,
+            $sourceStandards,
+            &$createdStandards,
+            &$createdIndicators,
+            &$createdPics
+        ) {
+            // Kalau force: bersihin dulu data TA aktif biar tidak dobel
+            if ($force) {
+                $targetStandardIds = AmiStandard::query()
+                    ->where('academic_config_id', $targetAc->id)
+                    ->pluck('id');
+
+                if ($targetStandardIds->isNotEmpty()) {
+                    $targetIndicatorIds = AmiStandardIndicator::query()
+                        ->whereIn('standard_id', $targetStandardIds)
+                        ->pluck('id');
+
+                    if ($targetIndicatorIds->isNotEmpty()) {
+                        AmiStandardIndicatorPic::query()
+                            ->whereIn('standard_indicator_id', $targetIndicatorIds)
+                            ->delete();
+
+                        AmiStandardIndicator::query()
+                            ->whereIn('id', $targetIndicatorIds)
+                            ->delete();
+                    }
+
+                    AmiStandard::query()
+                        ->whereIn('id', $targetStandardIds)
+                        ->delete();
+                }
+            }
+
+            foreach ($sourceStandards as $srcStd) {
+                $newStd = new AmiStandard();
+                $newStd->id = AmiStandard::generateNextId();
+                $newStd->name = $srcStd->name;
+                $newStd->academic_config_id = $targetAc->id;
+
+                // Biar aman: hasil copy masuk "Draft" dulu.
+                // Admin nanti klik Submit Semua Standar.
+                $newStd->active = false;
+                $newStd->save();
+
+                $createdStandards++;
+
+                // Clone indikator
+                foreach (($srcStd->indicators ?? collect()) as $srcInd) {
+                    $newInd = new AmiStandardIndicator();
+                    $newInd->id = AmiStandardIndicator::generateNextId();
+                    $newInd->standard_id = $newStd->id;
+                    $newInd->description = $srcInd->description;
+
+                    // Copy indikator biasanya langsung aktif (standarnya tetap draft sampai submit)
+                    $newInd->active = true;
+                    $newInd->save();
+
+                    $createdIndicators++;
+
+                    // Clone PIC role
+                    foreach (($srcInd->pics ?? collect()) as $srcPic) {
+                        $newPic = new AmiStandardIndicatorPic();
+                        $newPic->id = AmiStandardIndicatorPic::generateNextId();
+                        $newPic->standard_indicator_id = $newInd->id;
+                        $newPic->role_id = $srcPic->role_id;
+                        $newPic->active = true;
+                        $newPic->save();
+
+                        $createdPics++;
+                    }
+                }
+            }
+        });
+
+        return redirect()
+            ->route('admin.ami.standard')
+            ->with(
+                'success',
+                "Copy selesai. {$createdStandards} standar, {$createdIndicators} indikator, {$createdPics} PIC berhasil dicopy ke TA aktif."
+            );
     }
 }

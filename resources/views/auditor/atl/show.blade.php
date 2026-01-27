@@ -29,19 +29,37 @@
         </span>
 
         @if(!$isFinal)
-          <button type="button" class="btn btn-outline-primary btn-sm rounded-pill"
-                  data-bs-toggle="modal" data-bs-target="#modalHeader">
-            <i class="ph-gear me-1"></i> Edit Header
-          </button>
 
-          <form method="POST" action="{{ route('auditor.atl.finalize', $atl->id) }}">
-            @csrf
-            <button type="submit" class="btn btn-success btn-sm rounded-pill"
-                    onclick="return confirm('Finalkan ATL? Setelah Final, tidak bisa edit lagi.')">
-              <i class="ph-lock-key me-1"></i> Finalkan
-            </button>
-          </form>
+          <button type="button" class="btn btn-success btn-sm rounded-pill" data-bs-toggle="modal" data-bs-target="#modalConfirmFinalizeAtl">
+            <i class="ph-lock-key me-1"></i> Finalkan
+          </button>
+        {{-- MODAL: KONFIRMASI FINAL ATL --}}
+        <div class="modal fade" id="modalConfirmFinalizeAtl" tabindex="-1" aria-labelledby="modalConfirmFinalizeAtlLabel" aria-hidden="true">
+          <div class="modal-dialog">
+            <form method="POST" action="{{ route('auditor.atl.finalize', $atl->id) }}" class="modal-content">
+              @csrf
+              <div class="modal-header">
+                <h5 class="modal-title" id="modalConfirmFinalizeAtlLabel">Konfirmasi Finalisasi ATL</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
+              </div>
+              <div class="modal-body">
+                <div class="mb-2">
+                  Yakin ingin memfinalkan Audit Tindak Lanjut ini?<br>
+                  <b>Setelah difinalkan, form tidak dapat diedit lagi.</b>
+                </div>
+              </div>
+              <div class="modal-footer">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Batal</button>
+                <button type="submit" class="btn btn-success">Finalkan</button>
+              </div>
+            </form>
+          </div>
+        </div>
         @else
+        <a class="btn btn-primary btn-sm rounded-pill"
+             href="{{ route('auditor.atl.exportDocx', $atl->id) }}">
+            <i class="ph-download-simple me-1"></i> Unduh DOCX
+        </a>
           <a class="btn btn-primary btn-sm rounded-pill"
              href="{{ route('auditor.atl.exportPdf', $atl->id) }}">
             <i class="ph-download-simple me-1"></i> Unduh PDF
@@ -240,9 +258,18 @@
             </td>
 
             <td>
-              @if($isFinal)
-                <div class="text-muted fs-sm">Terkunci.</div>
-              @else
+            @if($isFinal)
+            <div class="text-muted fs-sm">Terkunci.</div>
+            @else
+
+            @if(!$completeAuditee)
+                <div class="text-muted fs-sm">
+                Menunggu Auditee mengisi <b>Realisasi</b> & <b>Efektivitas</b>.
+                </div>
+                <button type="button" class="btn btn-sm btn-secondary mt-1" disabled>
+                <i class="ph-lock me-1"></i> Isi Status
+                </button>
+            @else
                 <button type="button" class="btn btn-sm btn-primary"
                         data-bs-toggle="modal" data-bs-target="#modalEditRowAuditor"
                         data-update-url="{{ route('auditor.atl.row.update', [$atl->id, $d->id]) }}"
@@ -257,9 +284,10 @@
                         data-efektivitas="{{ e($d->effectiveness ?? '') }}"
                         data-status="{{ e($d->status ?? '') }}"
                         data-status-desc-b64="{{ base64_encode($d->status_description ?? '') }}">
-                  <i class="ph-pencil-simple me-1"></i> Isi Status
+                <i class="ph-pencil-simple me-1"></i> Isi Status
                 </button>
-              @endif
+            @endif
+            @endif
             </td>
           </tr>
         @empty
@@ -292,71 +320,7 @@
   </div>
 </div>
 
-{{-- MODAL: EDIT HEADER --}}
-@if(!$isFinal)
-<div class="modal fade" id="modalHeader" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-lg">
-    <form method="POST" action="{{ route('auditor.atl.header.update', $atl->id) }}" class="modal-content">
-      @csrf
-      @method('PUT')
-
-      <div class="modal-header">
-        <h5 class="modal-title">Edit Header ATL</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
-      </div>
-
-      <div class="modal-body">
-        <div class="alert alert-warning py-2">Kalau sudah Final, terkunci.</div>
-
-        <div class="mb-3">
-          <label class="form-label fw-semibold">Area</label>
-          <input type="text" name="area" class="form-control"
-                 value="{{ old('area', $atl->area) }}" placeholder="Area / Unit yang diaudit">
-        </div>
-
-        <div class="mb-3">
-          <label class="form-label fw-semibold">Tanggal Audit</label>
-          <input type="date" name="audit_date" class="form-control"
-                 value="{{ old('audit_date', \Carbon\Carbon::parse($atl->audit_date)->format('Y-m-d')) }}">
-        </div>
-
-        <div class="row g-3">
-          <div class="col-md-6">
-            <label class="form-label fw-semibold">Ketua Auditor</label>
-            <input type="text" class="form-control"
-                   value="{{ optional(optional($atl->auditorUserRole)->user)->name ?? '—' }}"
-                   readonly>
-            <div class="text-muted fs-sm mt-1">Ditentukan oleh Admin (tidak bisa diubah).</div>
-          </div>
-
-          <div class="col-md-6">
-            <label class="form-label fw-semibold">Anggota Auditor</label>
-            <select name="member_auditor_user_role_id"
-                    class="form-control form-control-select2 select-user-ajax"
-                    data-placeholder="Cari auditor..."
-                    data-url="{{ route('auditor.atl.searchAuditors') }}">
-              @if(old('member_auditor_user_role_id', $atl->member_auditor_user_role_id))
-                <option value="{{ old('member_auditor_user_role_id', $atl->member_auditor_user_role_id) }}" selected>
-                  {{ optional(optional($atl->memberAuditorUserRole)->user)->name ?? 'Anggota terpilih' }}
-                </option>
-              @endif
-            </select>
-            <div class="text-muted fs-sm mt-1">Anggota bisa isi status baris, tapi tidak bisa Final.</div>
-          </div>
-        </div>
-
-      </div>
-
-      <div class="modal-footer">
-        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Tutup</button>
-        <button type="submit" class="btn btn-primary">
-          <i class="ph-floppy-disk me-1"></i> Simpan Header
-        </button>
-      </div>
-    </form>
-  </div>
-</div>
-@endif
+{{-- Edit Header dihilangkan, header mengikuti data Temuan --}}
 
 {{-- MODAL: EDIT ROW (AUDITOR) --}}
 @if(!$isFinal)

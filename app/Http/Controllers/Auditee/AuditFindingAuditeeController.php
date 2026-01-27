@@ -52,7 +52,7 @@ class AuditFindingAuditeeController extends Controller
         abort_unless($user, 403, 'User belum login.');
 
         $myUserId = (string) $user->id;
-        $myName   = trim(mb_strtolower((string) ($user->name ?? '')));
+        $myName = trim(mb_strtolower((string) ($user->name ?? '')));
 
         // 1) Ketua auditee (STRING NAME)
         $headName = trim(mb_strtolower((string) ($fed->head_auditee_name ?? '')));
@@ -65,7 +65,7 @@ class AuditFindingAuditeeController extends Controller
             $fed->member_auditee_1_user_id ?? null,
             $fed->member_auditee_2_user_id ?? null,
             $fed->member_auditee_3_user_id ?? null,
-        ], fn($v) => !is_null($v) && (string)$v !== '');
+        ], fn($v) => !is_null($v) && (string) $v !== '');
 
         $memberIds = array_map('strval', $memberIds);
 
@@ -78,19 +78,24 @@ class AuditFindingAuditeeController extends Controller
 
     public function index(Request $request)
     {
-        $academicId = $this->activeAcademicId();
-        abort_unless($academicId, 403, 'Tahun akademik aktif belum diset.');
 
         $user = auth()->user();
         abort_unless($user, 403, 'User belum login.');
 
         $myUserId = (string) $user->id;
-        $myName   = trim(mb_strtolower((string) ($user->name ?? '')));
+        $myName = trim(mb_strtolower((string) ($user->name ?? '')));
 
         $q = trim((string) $request->query('q', ''));
 
+        $academicOptions = AcademicConfig::orderByDesc('active')->orderBy('name')->get();
+        $prodiOptions = \App\Models\RefCategoryDetail::orderBy('name')->get();
+        $statusOptions = \App\Models\EvaluationStatus::orderBy('name')->get();
+
+        $academicId = $request->query('academic_id');
+        $prodiId = $request->query('prodi_id');
+        $statusId = $request->query('status_id');
+
         $feds = SelfEvaluationForm::with(['categoryDetail', 'status', 'academicConfig'])
-            ->where('academic_config_id', $academicId)
             ->where('active', 1)
             ->whereHas('status', fn($s) => $s->where('name', self::FED_APPROVED_STATUS_NAME))
             ->where(function ($qq) use ($myUserId, $myName) {
@@ -98,19 +103,21 @@ class AuditFindingAuditeeController extends Controller
                 if ($myName !== '') {
                     $qq->whereRaw('LOWER(TRIM(head_auditee_name)) = ?', [$myName]);
                 }
-
                 // Anggota (berdasarkan USER ID)
                 $qq->orWhere('member_auditee_1_user_id', $myUserId)
-                   ->orWhere('member_auditee_2_user_id', $myUserId)
-                   ->orWhere('member_auditee_3_user_id', $myUserId);
+                    ->orWhere('member_auditee_2_user_id', $myUserId)
+                    ->orWhere('member_auditee_3_user_id', $myUserId);
             })
+            ->when($academicId, fn($qq) => $qq->where('academic_config_id', $academicId))
+            ->when($prodiId, fn($qq) => $qq->where('category_detail_id', $prodiId))
+            ->when($statusId, fn($qq) => $qq->where('status_id', $statusId))
             ->when($q !== '', function ($qq) use ($q) {
                 $qq->whereHas('categoryDetail', fn($x) => $x->where('name', 'like', "%{$q}%"));
             })
             ->orderBy('category_detail_id')
             ->get();
 
-        return view('auditee.temuan.index', compact('feds', 'q'));
+        return view('auditee.temuan.index', compact('feds', 'q', 'academicOptions', 'prodiOptions', 'statusOptions', 'academicId', 'prodiId', 'statusId'));
     }
 
     public function show(SelfEvaluationForm $fed)
@@ -130,17 +137,17 @@ class AuditFindingAuditeeController extends Controller
         abort_unless($form, 404, 'Form temuan belum dibuat auditor.');
 
         $rows = AuditFinding::with([
-                'selfEvaluationDetail.standardAchievement',
-                'selfEvaluationDetail.indicator.standard',
-                'selfEvaluationDetail.indicator.pics.role',
-            ])
+            'selfEvaluationDetail.standardAchievement',
+            'selfEvaluationDetail.indicator.standard',
+            'selfEvaluationDetail.indicator.pics.role',
+        ])
             ->where('audit_finding_form_id', $form->id)
             ->where('active', 1)
             ->orderBy('finding_no')
             ->get();
 
         $rowsPositive = $rows->filter(fn($r) => !$this->isNegativeFromRow($r))->values();
-        $rowsNegative = $rows->filter(fn($r) =>  $this->isNegativeFromRow($r))->values();
+        $rowsNegative = $rows->filter(fn($r) => $this->isNegativeFromRow($r))->values();
 
         $total = $rows->count();
         $complete = $rows->filter(function ($r) {

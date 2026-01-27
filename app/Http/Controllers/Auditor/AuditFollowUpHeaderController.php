@@ -11,7 +11,9 @@ use App\Models\AuditFollowUpForm;
 use App\Models\SelfEvaluationForm;
 use App\Models\UserRole;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 
 class AuditFollowUpHeaderController extends Controller
@@ -19,11 +21,11 @@ class AuditFollowUpHeaderController extends Controller
     private const FORM_STATUS_DRAFT = 'Draft';
     private const FORM_STATUS_FINAL = 'Final';
 
-    /* ================= Helper Umum ================= */
+    /* ================= Helpers Umum ================= */
 
-    private function activeAcademicId(): ?string
+    private function activeAcademic(): ?AcademicConfig
     {
-        return AcademicConfig::where('active', true)->value('id');
+        return AcademicConfig::where('active', true)->first();
     }
 
     private function currentUserRole(): ?UserRole
@@ -51,20 +53,37 @@ class AuditFollowUpHeaderController extends Controller
     private function isAdmin(): bool
     {
         $u = auth()->user();
-        return (bool) $u && $u->username === 'adminspm';
+        return (bool)$u && $u->username === 'adminspm';
     }
 
     private function normalize(?string $v): string
     {
-        return trim((string) ($v ?? ''));
+        return trim((string)($v ?? ''));
     }
 
-    /* ================= Akses (AUDITOR + AUDITEE) ================= */
-
     /**
-     * Ambil semua user_role_id auditee dari FED.
-     * Fallback: created_by/updated_by biar gak blank.
+     * updated_by aman (kalau kolom numeric -> pakai auth()->id()
+     * kalau string/char/text -> pakai role_id jika ada, fallback "u:{id}"
      */
+    private function auditActorForColumn(string $table, string $column): mixed
+    {
+        $u = auth()->user();
+        if (!$u) return null;
+
+        if (!Schema::hasColumn($table, $column)) return null;
+
+        $type = Schema::getColumnType($table, $column);
+
+        if (in_array($type, ['integer', 'bigint', 'smallint'], true)) {
+            return $u->id;
+        }
+
+        $roleId = $this->currentUserRoleId();
+        return $roleId ?: ('u:' . (string)$u->id);
+    }
+
+    /* ================= Akses ================= */
+
     private function auditeeRoleIds(SelfEvaluationForm $fed): array
     {
         $candidates = [];
@@ -75,32 +94,25 @@ class AuditFollowUpHeaderController extends Controller
             'member_auditee_2_user_role_id',
             'member_auditee_3_user_role_id',
         ] as $col) {
-            if (!empty($fed->{$col})) $candidates[] = (string) $fed->{$col};
+            if (!empty($fed->{$col})) $candidates[] = (string)$fed->{$col};
         }
 
-        // fallback common variants
         foreach ([
             'head_auditee_role_id',
             'member_auditee_1_role_id',
             'member_auditee_2_role_id',
             'member_auditee_3_role_id',
         ] as $col) {
-            if (!empty($fed->{$col})) $candidates[] = (string) $fed->{$col};
+            if (!empty($fed->{$col})) $candidates[] = (string)$fed->{$col};
         }
 
         foreach (['created_by', 'updated_by'] as $col) {
-            if (!empty($fed->{$col})) $candidates[] = (string) $fed->{$col};
+            if (!empty($fed->{$col})) $candidates[] = (string)$fed->{$col};
         }
 
         return array_values(array_unique(array_filter($candidates)));
     }
 
-    /**
-     * Akses ATL:
-     * - admin
-     * - auditor ketua / anggota (dari finding form)
-     * - auditee head / member 1-3 (dari FED)
-     */
     private function ensureUserCanAccessAtl(AuditFindingForm $findingForm, SelfEvaluationForm $fed): void
     {
         if ($this->isAdmin()) return;
@@ -118,9 +130,6 @@ class AuditFollowUpHeaderController extends Controller
         abort_unless($allowedAuditor || $allowedAuditee, 403, 'Tidak berhak mengakses Audit Tindak Lanjut.');
     }
 
-    /**
-     * Hanya ketua auditor (atau admin) boleh Final / ubah assignment.
-     */
     private function ensureLeaderOrAdmin(AuditFindingForm $findingForm): void
     {
         if ($this->isAdmin()) return;
@@ -129,7 +138,7 @@ class AuditFollowUpHeaderController extends Controller
         abort_unless($myRoleId, 403, 'User role tidak ditemukan.');
 
         abort_unless(
-            $findingForm->auditor_user_role_id === $myRoleId,
+            (string)$findingForm->auditor_user_role_id === (string)$myRoleId,
             403,
             'Hanya Ketua Auditor yang boleh melakukan aksi ini.'
         );
@@ -138,15 +147,15 @@ class AuditFollowUpHeaderController extends Controller
     /* ================= Data Builder ================= */
 
     /**
-     * ATL detail seharusnya hanya untuk TEMUAN NEGATIF.
-     * Kamu sebelumnya pakai "severity != null" sebagai indikasi negatif.
+     * Temuan NEGATIF tahun berjalan (dari findingForm ini saja)
      */
-    private function negativeFindings(AuditFindingForm $findingForm)
+    private function negativeFindings(AuditFindingForm $findingForm): Collection
     {
         return AuditFinding::with([
-                'selfEvaluationDetail.standardAchievement',
-                'selfEvaluationDetail.indicator.standard',
-            ])
+            'selfEvaluationDetail.standardAchievement',
+            'selfEvaluationDetail.indicator.standard',
+            'form.selfEvaluationForm.academicConfig',
+        ])
             ->where('audit_finding_form_id', $findingForm->id)
             ->where('active', 1)
             ->whereNotNull('severity')
@@ -155,60 +164,128 @@ class AuditFollowUpHeaderController extends Controller
     }
 
     /**
-     * Sinkron detail ATL:
-     * - Pastikan setiap temuan negatif punya 1 baris detail aktif.
-     * - Tidak bikin duplikat.
+     * ✅ Ambil SEMUA ATL histori (semua academic non-aktif) untuk unit/prodi sama
+     * yang status detail-nya Open/Toleran.
+     *
+     * READ-ONLY untuk tabel atas. TIDAK akan disinkronkan ke ATL tahun berjalan.
      */
-    private function syncFollowUpDetails(AuditFollowUpForm $form, $negativeFindings): void
+    private function prevOpenToleranDetailsAllYears(SelfEvaluationForm $currentFed): Collection
     {
-        $findingIds = $negativeFindings->pluck('id')->filter()->values();
+        $currentAcId = (string)($currentFed->academic_config_id ?? '');
+        $catId = (string)($currentFed->category_detail_id ?? '');
+        if ($catId === '') return collect();
+
+        $prevAcs = AcademicConfig::where('active', false)
+            ->when($currentAcId !== '', fn($q) => $q->where('id', '!=', $currentAcId))
+            ->orderByDesc('created_at')
+            ->get();
+
+        if ($prevAcs->isEmpty()) return collect();
+
+        $all = collect();
+
+        foreach ($prevAcs as $prevAc) {
+            $prevFed = SelfEvaluationForm::where('active', 1)
+                ->where('academic_config_id', $prevAc->id)
+                ->where('category_detail_id', $catId)
+                ->latest('created_at')
+                ->first();
+
+            if (!$prevFed) continue;
+
+            $prevFindingForm = AuditFindingForm::where('active', 1)
+                ->where('self_evaluation_form_id', $prevFed->id)
+                ->where('status', self::FORM_STATUS_FINAL)
+                ->latest('audit_date')
+                ->first();
+
+            if (!$prevFindingForm) continue;
+
+            $prevAtl = AuditFollowUpForm::where('active', 1)
+                ->where('audit_finding_form_id', $prevFindingForm->id)
+                ->where('status', self::FORM_STATUS_FINAL)
+                ->latest('audit_date')
+                ->first();
+
+            if (!$prevAtl) continue;
+
+            $rows = AuditFollowUpDetail::with([
+                'finding.selfEvaluationDetail.standardAchievement',
+                'finding.selfEvaluationDetail.indicator.standard',
+                'finding.selfEvaluationDetail.indicator.pics.role',
+                'finding.form.selfEvaluationForm.academicConfig',
+            ])
+                ->where('active', 1)
+                ->where('audit_follow_up_form_id', $prevAtl->id)
+                ->whereIn('status', ['Open', 'Toleran'])
+                ->orderBy('id')
+                ->get();
+
+            if ($rows->isNotEmpty()) $all = $all->merge($rows);
+        }
+
+        return $all->values();
+    }
+
+    /**
+     * Sync detail ATL tahun berjalan:
+     * - Hanya untuk temuan tahun berjalan (findingForm ini).
+     * - Tidak pernah memasukkan temuan histori.
+     */
+    private function syncFollowUpDetailsCurrentYearOnly(AuditFollowUpForm $form, Collection $findings): void
+    {
+        $findingIds = $findings->pluck('id')->filter()->values();
         if ($findingIds->isEmpty()) return;
 
         $existing = AuditFollowUpDetail::where('audit_follow_up_form_id', $form->id)
             ->where('active', 1)
-            ->pluck('audit_finding_id');
+            ->pluck('audit_finding_id')
+            ->map(fn($x) => (string)$x);
 
-        $missing = $findingIds->diff($existing);
+        $missing = $findingIds->map(fn($x) => (string)$x)->diff($existing);
         if ($missing->isEmpty()) return;
 
         foreach ($missing as $fid) {
-            AuditFollowUpDetail::create([
+            $row = [
                 'id' => AuditFollowUpDetail::generateNextId(),
                 'audit_follow_up_form_id' => $form->id,
                 'audit_finding_id' => $fid,
                 'active' => 1,
-            ]);
+            ];
+
+            $actor = $this->auditActorForColumn('audit_follow_up_details', 'updated_by');
+            if (!is_null($actor)) $row['updated_by'] = $actor;
+
+            AuditFollowUpDetail::create($row);
         }
     }
 
     private function isRowComplete(AuditFollowUpDetail $d): bool
     {
-        // wajib: 3 kolom inti
         return $this->normalize($d->follow_up_realization) !== ''
             && $this->normalize($d->effectiveness) !== ''
             && $this->normalize($d->status) !== '';
-        // status_description sengaja tidak diwajibkan (permintaan "tetap memilih", deskripsi optional)
     }
 
     /* ================= Index ================= */
 
     public function index(Request $request)
     {
-        $academicId = $this->activeAcademicId();
-        abort_unless($academicId, 403, 'Tahun akademik aktif belum diset.');
+        $active = $this->activeAcademic();
+        abort_unless($active, 403, 'Tahun akademik aktif belum diset.');
 
-        $q = trim((string) $request->query('q', ''));
+        $q = trim((string)$request->query('q', ''));
 
-        // list finding form FINAL (sama seperti blade kamu)
         $forms = AuditFindingForm::with(['selfEvaluationForm.categoryDetail', 'selfEvaluationForm.academicConfig'])
             ->where('active', 1)
             ->where('status', self::FORM_STATUS_FINAL)
             ->when($q !== '', function ($qq) use ($q) {
                 $qq->whereHas('selfEvaluationForm.categoryDetail', fn($x) => $x->where('name', 'like', "%{$q}%"))
-                   ->orWhere('area', 'like', "%{$q}%");
+                    ->orWhere('area', 'like', "%{$q}%");
             })
             ->orderBy('audit_date', 'desc')
-            ->get();
+            ->paginate(10)
+            ->withQueryString();
 
         return view('auditor.atl.index', compact('forms', 'q'));
     }
@@ -228,14 +305,18 @@ class AuditFollowUpHeaderController extends Controller
 
         $this->ensureUserCanAccessAtl($findingForm, $fed);
 
-        // build header ATL
+        // ✅ 1) prevDetails untuk tabel atas (SEMUA TAHUN HISTORI yang masih Open/Toleran)
+        $prevDetails = $this->prevOpenToleranDetailsAllYears($fed);
+
+        // ✅ 2) buat header ATL tahun berjalan
+        $atl = null;
         DB::transaction(function () use ($findingForm, &$atl) {
             $atl = AuditFollowUpForm::where('audit_finding_form_id', $findingForm->id)
                 ->where('active', 1)
                 ->first();
 
             if (!$atl) {
-                $atl = AuditFollowUpForm::create([
+                $data = [
                     'id' => AuditFollowUpForm::generateNextId(),
                     'audit_finding_form_id' => $findingForm->id,
                     'area' => $findingForm->area,
@@ -244,30 +325,41 @@ class AuditFollowUpHeaderController extends Controller
                     'active' => 1,
                     'auditor_user_role_id' => $findingForm->auditor_user_role_id,
                     'member_auditor_user_role_id' => $findingForm->member_auditor_user_role_id,
-                ]);
+                ];
+
+                $actor = $this->auditActorForColumn('audit_follow_up_forms', 'updated_by');
+                if (!is_null($actor)) $data['updated_by'] = $actor;
+
+                $atl = AuditFollowUpForm::create($data);
             }
         });
 
+        // ✅ 3) findings tahun berjalan SAJA
         $negativeFindings = $this->negativeFindings($findingForm);
 
-        // sync detail rows (kalau ATL belum final, biar aman)
+        // ✅ 4) sync detail rows (HANYA tahun berjalan)
         if (($atl->status ?? '') !== self::FORM_STATUS_FINAL) {
             DB::transaction(function () use ($atl, $negativeFindings) {
-                $this->syncFollowUpDetails($atl, $negativeFindings);
+                $this->syncFollowUpDetailsCurrentYearOnly($atl, $negativeFindings);
             });
         }
 
-        // ambil detail untuk tabel
+        // ✅ 5) detail untuk tabel bawah: HANYA yang finding-nya dari findingForm tahun berjalan
         $details = AuditFollowUpDetail::with([
-                'finding.selfEvaluationDetail.standardAchievement',
-                'finding.selfEvaluationDetail.indicator.standard',
-            ])
+            'finding.selfEvaluationDetail.standardAchievement',
+            'finding.selfEvaluationDetail.indicator.standard',
+            'finding.selfEvaluationDetail.indicator.pics.role',
+            'finding.form.selfEvaluationForm.academicConfig',
+        ])
             ->where('audit_follow_up_form_id', $atl->id)
             ->where('active', 1)
+            ->whereHas('finding', function ($q) use ($findingForm) {
+                $q->where('audit_finding_form_id', $findingForm->id);
+            })
             ->orderBy('id')
             ->get();
 
-        // progress
+        // progress hanya berdasarkan tabel bawah
         $total = $details->count();
         $complete = $details->filter(fn($d) => $this->isRowComplete($d))->count();
         $progress = [
@@ -276,14 +368,11 @@ class AuditFollowUpHeaderController extends Controller
             'percent' => $total ? round(100 * $complete / $total, 1) : 0.0,
         ];
 
-        // buat header view (sesuai blade kamu yang pakai unitName/academicText)
         $unitName = optional($fed->categoryDetail)->name ?? ($findingForm->area ?? 'Unit/Prodi');
         $academicText = optional($fed->academicConfig)->name ?? optional($fed->academicConfig)->tahun ?? null;
 
-        // options untuk badge severity (kalau blade butuh)
         $severityOptions = AuditFinding::SEVERITY_OPTIONS;
 
-        // daftar user role auditor (buat modal header)
         $auditorUserRoles = UserRole::with(['user', 'role'])
             ->where('active', 1)
             ->orderBy('id', 'desc')
@@ -294,8 +383,8 @@ class AuditFollowUpHeaderController extends Controller
             'findingForm',
             'fed',
             'atl',
-            'negativeFindings',
             'details',
+            'prevDetails',
             'progress',
             'unitName',
             'academicText',
@@ -303,38 +392,6 @@ class AuditFollowUpHeaderController extends Controller
             'auditorUserRoles'
         ));
     }
-
-    /* ================= Update Header ================= */
-
-    public function updateHeader(Request $request, AuditFindingForm $form)
-    {
-        $this->ensureUserCanAccessForm($form);
-
-        if ($form->status === self::FORM_STATUS_FINAL) {
-            return back()->with('warning', 'Form sudah Final dan tidak dapat diubah.');
-        }
-
-        $this->ensureLeaderOrAdmin($form);
-
-        $data = $request->validate([
-            'area' => ['nullable', 'string', 'max:255'],
-            'audit_date' => ['nullable', 'date'],
-
-            // HANYA anggota auditor yang bisa dipilih
-            'member_auditor_user_role_id' => ['nullable', 'exists:user_roles,id', 'different:auditor_user_role_id'],
-        ]);
-
-        $form->update([
-            'area' => $data['area'] ?? $form->area,
-            'audit_date' => $data['audit_date'] ?? $form->audit_date,
-
-            // ketua tetap: jangan disentuh
-            'member_auditor_user_role_id' => $data['member_auditor_user_role_id'] ?? null,
-        ]);
-
-        return back()->with('success', 'Header & anggota auditor berhasil diperbarui.');
-    }
-
 
     /* ================= Finalize ================= */
 
@@ -352,30 +409,36 @@ class AuditFollowUpHeaderController extends Controller
 
         $details = AuditFollowUpDetail::where('audit_follow_up_form_id', $form->id)
             ->where('active', 1)
+            ->whereHas('finding', function ($q) use ($findingForm) {
+                $q->where('audit_finding_form_id', $findingForm->id);
+            })
             ->get();
 
         if ($details->isEmpty()) {
             throw ValidationException::withMessages([
-                'form' => 'Tidak ada baris ATL. Pastikan ada temuan negatif untuk dibuatkan ATL.',
+                'form' => 'Tidak ada baris ATL tahun berjalan.',
             ]);
         }
 
         $incomplete = $details->filter(fn($d) => !$this->isRowComplete($d))->count();
-
         if ($incomplete > 0) {
             throw ValidationException::withMessages([
                 'form' => "Masih ada {$incomplete} baris ATL belum lengkap (Realisasi, Efektivitas, Status).",
             ]);
         }
 
-        $form->update(['status' => self::FORM_STATUS_FINAL]);
+        $payload = ['status' => self::FORM_STATUS_FINAL];
+        $actor = $this->auditActorForColumn('audit_follow_up_forms', 'updated_by');
+        if (!is_null($actor)) $payload['updated_by'] = $actor;
+
+        $form->update($payload);
 
         return back()->with('success', 'Form Audit Tindak Lanjut berhasil Final (terkunci).');
     }
 
     public function searchAuditors(Request $request)
     {
-        $q = trim((string) $request->query('q', ''));
+        $q = trim((string)$request->query('q', ''));
 
         $urs = UserRole::query()
             ->with(['user', 'role'])
@@ -383,8 +446,8 @@ class AuditFollowUpHeaderController extends Controller
             ->when($q !== '', function ($qq) use ($q) {
                 $qq->whereHas('user', function ($u) use ($q) {
                     $u->where('name', 'like', "%{$q}%")
-                    ->orWhere('email', 'like', "%{$q}%")
-                    ->orWhere('username', 'like', "%{$q}%");
+                        ->orWhere('email', 'like', "%{$q}%")
+                        ->orWhere('username', 'like', "%{$q}%");
                 });
             })
             ->orderByDesc('created_at')
@@ -393,11 +456,10 @@ class AuditFollowUpHeaderController extends Controller
 
         return response()->json(
             $urs->map(fn($ur) => [
-                'id' => $ur->id, // ✅ user_roles.id
-                'name' => optional($ur->user)->name ?? ('User#'.$ur->id),
+                'id' => $ur->id,
+                'name' => optional($ur->user)->name ?? ('User#' . $ur->id),
                 'role_name' => optional($ur->role)->name ?? 'Anggota',
             ])->values()
         );
     }
-
 }

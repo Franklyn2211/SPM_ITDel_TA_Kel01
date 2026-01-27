@@ -30,6 +30,14 @@
 
         @if($isFinal)
           <span class="badge bg-success rounded-pill"><i class="ph-lock me-1"></i> Terkunci</span>
+            <a class="btn btn-primary btn-sm rounded-pill"
+                 href="{{ route('auditee.atl.exportDocx', $atl->id) }}">
+                <i class="ph-download-simple me-1"></i> Unduh DOCX
+            </a>
+            <a class="btn btn-primary btn-sm rounded-pill"
+                 href="{{ route('auditee.atl.exportPdf', $atl->id) }}">
+                <i class="ph-download-simple me-1"></i> Unduh PDF
+            </a>
         @endif
       </div>
     </div>
@@ -136,7 +144,8 @@
           </tr>
         </thead>
         <tbody>
-        @forelse($details as $d)
+        @php $start = ($details->currentPage() - 1) * $details->perPage(); @endphp
+        @forelse($details as $i => $d)
           @php
             $finding = $d->finding;
             $detailFed = $finding?->selfEvaluationDetail;
@@ -161,7 +170,7 @@
           @endphp
 
           <tr>
-            <td class="text-center">{{ $loop->iteration }}</td>
+            <td class="text-center">{{ $start + $i + 1 }}</td>
 
             <td>
               <div class="fw-semibold">{{ $stdName }}</div>
@@ -229,6 +238,9 @@
         </tbody>
       </table>
     </div>
+    <div class="card-footer border-top-0">
+      {{ $details->onEachSide(1)->links('pagination::bootstrap-5') }}
+    </div>
   </div>
 
 </div>
@@ -256,7 +268,7 @@
         <div class="mb-3">
           <label class="form-label fw-semibold">Efektivitas</label>
           <input type="text" name="effectiveness" id="edit_efektivitas" class="form-control"
-                 placeholder="Contoh: Efektif / Cukup / Tidak Efektif">
+                 placeholder="Contoh: 50%">
         </div>
       </div>
 

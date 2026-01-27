@@ -58,7 +58,7 @@
           <a href="{{ route('auditor.atl.index') }}"
               class="nav-link {{ request()->routeIs('auditor.atl.*') ? 'active' : '' }}">
               <i class="ph-archive-box"></i>
-              <span>Form ATL</span>
+              <span>Audit Tindak Lanjut</span>
           </a>
         </li>
 

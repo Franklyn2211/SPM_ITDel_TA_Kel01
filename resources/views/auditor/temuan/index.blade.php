@@ -19,16 +19,44 @@
         <span class="breadcrumb-item active">Temuan Audit</span>
       </div>
 
-      <div class="ms-auto">
-        <form method="GET" class="d-flex align-items-center gap-2">
-          <input type="text"
-                 class="form-control form-control-sm"
-                 name="q"
-                 value="{{ $q ?? '' }}"
-                 placeholder="Cari Unit/Prodi...">
-          <button class="btn btn-sm btn-outline-primary">
-            <i class="ph-magnifying-glass me-1"></i> Cari
-          </button>
+      <div class="ms-auto w-100 w-lg-auto">
+        <form method="GET" class="row g-2 align-items-end justify-content-end">
+          <div class="col-12 col-md-auto">
+            <label class="form-label mb-1">Tahun Akademik</label>
+            <select name="academic_id" class="form-select form-select-sm">
+              <option value="">Semua Tahun Akademik</option>
+              @foreach($academicOptions as $ac)
+                <option value="{{ $ac->id }}" @if(($academicId ?? '') == $ac->id) selected @endif>{{ $ac->name ?? $ac->academic_code }}</option>
+              @endforeach
+            </select>
+          </div>
+          <div class="col-12 col-md-auto">
+            <label class="form-label mb-1">Unit/Prodi</label>
+            <select name="prodi_id" class="form-select form-select-sm">
+              <option value="">Semua Unit/Prodi</option>
+              @foreach($prodiOptions as $p)
+                <option value="{{ $p->id }}" @if(($prodiId ?? '') == $p->id) selected @endif>{{ $p->name }}</option>
+              @endforeach
+            </select>
+          </div>
+          <div class="col-12 col-md-auto">
+            <label class="form-label mb-1">Status</label>
+            <select name="status_id" class="form-select form-select-sm">
+              <option value="">Semua Status</option>
+              @foreach($statusOptions as $s)
+                <option value="{{ $s->id }}" @if(($statusId ?? '') == $s->id) selected @endif>{{ $s->name }}</option>
+              @endforeach
+            </select>
+          </div>
+          <div class="col-12 col-md-auto">
+            <label class="form-label mb-1">Cari</label>
+            <div class="input-group input-group-sm">
+              <input type="text" class="form-control" name="q" value="{{ $q ?? '' }}" placeholder="Cari Unit/Prodi...">
+              <button class="btn btn-outline-primary" type="submit">
+                <i class="ph-magnifying-glass me-1"></i> Cari
+              </button>
+            </div>
+          </div>
         </form>
       </div>
     </div>
@@ -73,11 +101,10 @@
     </div>
   @endif
 
-  <div class="card">
+  <div class="card mt-3">
     <div class="card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
       <h5 class="mb-0">Daftar FED</h5>
     </div>
-
     <div class="table-responsive">
       <table class="table table-hover align-middle mb-0">
         <thead class="table-light">
@@ -90,12 +117,12 @@
           </tr>
         </thead>
         <tbody>
+          @php $start = ($feds->currentPage() - 1) * $feds->perPage(); @endphp
           @forelse($feds as $i => $fed)
             <tr>
-              <td>{{ $i + 1 }}</td>
+              <td>{{ $start + $i + 1 }}</td>
               <td>
                 <div class="fw-semibold">{{ $fed->categoryDetail->name ?? '-' }}</div>
-                <div class="text-muted fs-sm">FED ID: {{ $fed->id }}</div>
               </td>
               <td>
                 {{ $fed->academicConfig->name ?? $fed->academicConfig->tahun ?? '—' }}
@@ -120,7 +147,9 @@
         </tbody>
       </table>
     </div>
-
+    <div class="card-footer border-top-0">
+      {{ $feds->onEachSide(1)->links('pagination::bootstrap-5') }}
+    </div>
   </div>
 </div>
 @endsection
